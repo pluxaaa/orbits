@@ -57,6 +57,7 @@ func StartServer() {
 		//иначе пустой: query=""
 
 		//поиск в Orbits основываясь на query
+		//здесь сначала получаем объекты для отображения - либо фильтр, либо все
 		var filteredOrbits []Orbit
 		if query != "" {
 			for i := 0; i < len(Orbits); i++ {
@@ -68,6 +69,7 @@ func StartServer() {
 			filteredOrbits = Orbits // если запрос пустой, то все орбиты
 		}
 
+		//выводим отфильтрованные (/все)
 		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
 			"orbits": filteredOrbits,
 		})

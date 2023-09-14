@@ -1,13 +1,13 @@
 body {
-    background-color: #f0f0f0; /* Светло-серый фон */
-    font-family: "Century Gothic", sans-serif; /* Шрифт Century Gothic */
-    margin: 0; /* Убираем отступы по умолчанию */
-    padding: 0; /* Убираем отступы по умолчанию */
+    background-color: #f0f0f0;
+    font-family: "Century Gothic", sans-serif;
+    margin: 0;
+    padding: 0;
 }
 
 .header {
-    background-color: #001246; /* Цвет фона заголовка (можете изменить на свой) */
-    color: white; /* Цвет текста заголовка */
+    background-color: #001246;
+    color: white;
     text-align: center;
     padding: 20px;
 }
@@ -22,16 +22,16 @@ body {
 .image-container {
     display: flex;
     flex-direction: column;
-    align-items: center; /* Центрирование по горизонтали */
-    justify-content: center; /* Центрирование по вертикали */
-    height: 400px; /* Высота контейнера изображения */
+    align-items: center;
+    justify-content: center;
+    height: 400px;
 }
 
 .card_image {
     width: 400px;
     height: 300px;
     object-fit: contain;
-    max-width: 100%; /* Чтобы изображение не превышало ширину контейнера */
+    max-width: 100%;
 }
 
 .card {
@@ -45,7 +45,6 @@ body {
 }
 
 
-/* Новый стиль для карточки на orbitDetail.html */
 .card-sub {
     background-color: white;
     border: 1px solid #ccc;
@@ -56,15 +55,13 @@ body {
     box-shadow: 0 2px 4px rgb(0, 18, 70);
 }
 
-/* Стиль для контейнера содержимого карточки */
 .card-content-sub {
     display: flex;
     flex-direction: row;
-    justify-content: flex-start; /* Изменено на выравнивание влево */
+    justify-content: flex-start;
     align-items: flex-start;
 }
 
-/* Стиль для изображения */
 .card_image-sub {
     width: 400px;
     height: 300px;
@@ -73,7 +70,6 @@ body {
     max-height: 100%;
 }
 
-/* Стиль для правой части контента (Title и Desc) */
 .right-content-sub {
     flex: 1;
     text-align: left;
@@ -85,7 +81,6 @@ body {
     margin: 10px 0;
 }
 
-/* Увеличьте отступ между Title и Desc */
 .right-content-sub p {
     margin-top: 10px;
 }
@@ -110,23 +105,20 @@ body {
     background-color: #001246;
 }
 
-/* Стиль для формы поиска */
 .search-form {
     text-align: center;
-    margin: 20px 0; /* Увеличьте отступы сверху и снизу формы */
+    margin: 20px 0;
 }
 
-/* Стиль для поля ввода */
 .search-form input[type="text"] {
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
     font-size: 16px;
     width: 300px;
-    margin-right: 10px; /* Отступ между полем ввода и кнопкой */
+    margin-right: 10px;
 }
 
-/* Стиль для кнопки поиска */
 .search-form button[type="submit"] {
     background-color: #0e3e8d;
     color: white;
@@ -137,7 +129,6 @@ body {
     cursor: pointer;
 }
 
-/* Стиль для кнопки поиска при наведении */
 .search-form button[type="submit"]:hover {
     background-color: #001246;
 }
