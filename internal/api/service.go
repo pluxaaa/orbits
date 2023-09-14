@@ -67,11 +67,13 @@ func StartServer() {
 			}
 		} else {
 			filteredOrbits = Orbits // если запрос пустой, то все орбиты
+			log.Println("nob")
 		}
 
 		//выводим отфильтрованные (/все)
 		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
 			"orbits": filteredOrbits,
+			"query":  query, //чтобы отображалось в html в {{ .query }}
 		})
 	})
 
