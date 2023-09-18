@@ -8,7 +8,7 @@
 </div>
 <div class="search-form">
     <form action="/home" method="GET">
-        <input type="text" name="query" placeholder="Поиск по названию">
+        <input type="text" name="query" autocomplete="on" value="{{ .query }}">
         <button type="submit">Найти</button>
     </form>
 </div>

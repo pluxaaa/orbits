@@ -12,6 +12,7 @@ body {
     padding: 20px;
 }
 
+
 .card_group {
     display: flex;
     flex-wrap: wrap;
@@ -91,6 +92,7 @@ body {
     margin: 10px 0;
 }
 
+
 .button {
     background-color: #0e3e8d;
     color: white;
@@ -118,6 +120,7 @@ body {
     width: 300px;
     margin-right: 10px;
 }
+
 
 .search-form button[type="submit"] {
     background-color: #0e3e8d;
