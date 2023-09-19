@@ -17,17 +17,27 @@ func main() {
 	}
 
 	// Migrate the schema
-	err = db.AutoMigrate(&ds.Product{})
+	err = db.AutoMigrate(&ds.Roles{})
 	if err != nil {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.Test{})
+	err = db.AutoMigrate(&ds.Users{})
 	if err != nil {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.DateTest{})
+	err = db.AutoMigrate(&ds.TransferRequest{})
+	if err != nil {
+		panic("cant migrate db")
+	}
+
+	err = db.AutoMigrate(&ds.Orbits{})
+	if err != nil {
+		panic("cant migrate db")
+	}
+
+	err = db.AutoMigrate(&ds.TransferToOrbit{})
 	if err != nil {
 		panic("cant migrate db")
 	}
