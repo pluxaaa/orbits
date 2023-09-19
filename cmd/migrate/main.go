@@ -21,4 +21,14 @@ func main() {
 	if err != nil {
 		panic("cant migrate db")
 	}
+
+	err = db.AutoMigrate(&ds.Test{})
+	if err != nil {
+		panic("cant migrate db")
+	}
+
+	err = db.AutoMigrate(&ds.DateTest{})
+	if err != nil {
+		panic("cant migrate db")
+	}
 }
