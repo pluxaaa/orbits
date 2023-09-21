@@ -38,8 +38,10 @@ func (a *Application) StartServer() {
 	a.r.GET("/:orbit_name", a.loadPage)
 
 	a.r.POST("/delete_orbit/:orbit_name", func(c *gin.Context) {
-		orbit_name := c.Param("orbit_name")
-		err := a.repo.ChangeAvailability(orbit_name)
+		orbitName := c.Param("orbit_name")
+
+		// Call the modified ChangeAvailability method
+		err := a.repo.ChangeAvailability(orbitName)
 
 		if err != nil {
 			c.Error(err)

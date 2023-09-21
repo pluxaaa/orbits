@@ -49,21 +49,16 @@ func (r *Repository) DeleteOrbit(orbit_name string) error {
 }
 
 func (r *Repository) ChangeAvailability(orbitName string) error {
-	// Получите текущее значение поля Free для указанной орбиты
-	orbit := ds.Orbits{}
-	if err := r.db.Where("name = ?", orbitName).First(&orbit).Error; err != nil {
+	query := "UPDATE orbits SET Free = NOT Free WHERE Name = $1"
+
+	sqlDB, err := r.db.DB()
+	if err != nil {
 		return err
 	}
 
-	// Инвертируйте значение поля Free
-	orbit.Free = !orbit.Free
+	_, err = sqlDB.Exec(query, orbitName)
 
-	// Обновите значение поля Free в базе данных
-	if err := r.db.Save(&orbit).Error; err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (r *Repository) GetAllOrbits() ([]ds.Orbits, error) {
@@ -98,12 +93,4 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
 	}
 
 	return orbit, nil
-}
-
-func (r *Repository) DeleteUser(user_name string) error {
-	return r.db.Delete(&ds.Users{}, "name = ?", user_name).Error
-}
-
-func (r *Repository) CreateUser(user ds.Users) error {
-	return r.db.Create(user).Error
 }
