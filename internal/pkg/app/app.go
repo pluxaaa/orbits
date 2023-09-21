@@ -1,11 +1,10 @@
 package app
 
 import (
-	"log"
-	"net/http"
-
 	"L1/internal/app/dsn"
 	"L1/internal/app/repository"
+	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
