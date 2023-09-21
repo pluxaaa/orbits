@@ -3,7 +3,6 @@ package app
 import (
 	"log"
 	"net/http"
-	"strconv"
 
 	"L1/internal/app/dsn"
 	"L1/internal/app/repository"
@@ -28,52 +27,68 @@ func New() Application {
 }
 
 func (a *Application) StartServer() {
-	log.Println("Server start up")
+	log.Println("Server started")
 
-	r := gin.Default()
+	a.r = gin.Default()
 
-	r.GET("/ping", func(c *gin.Context) {
-		id := c.Query("id") // получаем из запроса query string
+	a.r.LoadHTMLGlob("templates/*.html")
+	a.r.Static("/css", "./templates")
 
-		if id != "" {
-			log.Printf("id recived %s\n", id)
-			intID, err := strconv.Atoi(id) // пытаемся привести это к чиселке
-			if err != nil {                // если не получилось
-				log.Printf("cant convert id %v", err)
-				c.Error(err)
-				return
-			}
+	a.r.GET("/", a.loadHome)
+	a.r.GET("/:orbit_name", a.loadPage)
 
-			product, err := a.repo.GetProductByID(intID)
-			if err != nil { // если не получилось
-				log.Printf("cant get product by id %v", err)
-				c.Error(err)
-				return
-			}
+	a.r.Run(":8000")
 
-			c.JSON(http.StatusOK, gin.H{
-				"product_price": product.Price,
-			})
+	log.Println("Server is down")
+}
+
+func (a *Application) loadHome(c *gin.Context) {
+	orbit_name := c.Query("orbit_name")
+
+	if orbit_name == "" {
+		log.Println("ALL ORBITS 1")
+
+		all_orbits, err := a.repo.GetAllOrbits()
+
+		if err != nil {
+			c.Error(err)
+		}
+
+		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+			"orbits": a.repo.FilterOrbits(all_orbits),
+		})
+	} else {
+		found_orbits, err := a.repo.SearchOrbits(orbit_name)
+
+		if err != nil {
+			c.Error(err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
+
+		c.HTML(http.StatusOK, "regions.html", gin.H{
+			"regions": a.repo.FilterOrbits(found_orbits),
 		})
+	}
+}
+
+func (a *Application) loadPage(c *gin.Context) {
+	orbit_name := c.Param("orbit_name")
+
+	if orbit_name == "favicon.ico" {
+		return
+	}
+
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.HTML(http.StatusOK, "orbitDetail.html", gin.H{
+		"Name":        orbit.Name,
+		"Image":       orbit.Image,
+		"Description": orbit.Description,
 	})
 
-	a.r.LoadHTMLGlob("../../templates/*.html")
-	a.r.Static("/css", "../../templates/css")
-
-	r.GET("/test", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "test.tmpl", gin.H{
-			"title": "Main website",
-			"test":  []string{"a", "b"},
-		})
-	})
-
-	r.Static("/image", "./resources")
-
-	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-
-	log.Println("Server down")
 }

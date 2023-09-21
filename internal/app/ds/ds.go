@@ -2,16 +2,10 @@ package ds
 
 import "gorm.io/datatypes"
 
-type Roles struct {
-	ID   uint `gorm:"primaryKey"`
-	Name string
-}
-
 type Users struct {
-	ID        uint `gorm:"primaryKey"`
-	RoleRefer int
-	Role      Roles `gorm:"foreignKey:RoleRefer"`
-	Name      string
+	ID    uint `gorm:"primaryKey"`
+	Moder bool
+	Name  string
 }
 
 type TransferRequest struct {
@@ -28,9 +22,10 @@ type TransferRequest struct {
 }
 
 type Orbits struct {
-	ID    uint `gorm:"primaryKey"`
-	Name  string
-	Image string `gorm:"type:bytea"`
+	ID          uint `gorm:"primaryKey"`
+	Name        string
+	Description string
+	Image       string `gorm:"type:bytea"`
 }
 
 type TransferToOrbit struct {
@@ -39,5 +34,4 @@ type TransferToOrbit struct {
 	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
 	OrbitRefer   int
 	Orbit        Orbits `gorm:"foreignKey:OrbitRefer"`
-	Name         string
 }

@@ -7,19 +7,20 @@
     <h1> Орбиты </h1>
 </div>
 <div class="search-form">
-    <form action="/home" method="GET">
-        <input type="text" name="query" autocomplete="on" value="{{ .query }}">
-        <button type="submit">Найти</button>
+    <form method="GET" action="" name="search" style="display:flex;align-items: center;">
+        <label for="orbit_name" style="float:left;margin-right: 10px;margin-left:10px">Введите название:</label>
+        <input type="text" id="orbit_name" name="orbit_name" style="float:left;margin-right: 20px;">
+        <input type="submit" class="button" value="Поиск" style="cursor: pointer !important;">
     </form>
 </div>
 <div class="card_group">
     {{ range .orbits }}
     <div class="card">
-        <h5 class="card_title">{{ .Title }}</h5>
+        <h5 class="card_title">{{ .Name }}</h5>
         <div class="image-container">
-            <img class="card_image" src="{{ .Image }}" alt="Изображение">
+            <img class="card_image" src="data:image/jpg;base64, {{ .Image }}" alt="картинка">
         </div>
-        <a class="button" href="home/{{ .Short }}">Просмотр</a>
+        <a class="button card_button" href="{{ .Name }}">Подробнее</a>
     </div>
     {{ end }}
 </div>
