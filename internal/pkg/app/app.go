@@ -37,36 +37,51 @@ func (a *Application) StartServer() {
 	a.r.GET("/", a.loadHome)
 	a.r.GET("/:orbit_name", a.loadPage)
 
-	a.r.Run(":8000")
-
-	log.Println("Server is down")
-}
-
-func (a *Application) loadHome(c *gin.Context) {
-	orbit_name := c.Query("orbit_name")
-
-	if orbit_name == "" {
-		log.Println("ALL ORBITS 1")
-
-		all_orbits, err := a.repo.GetAllOrbits()
-
-		if err != nil {
-			c.Error(err)
-		}
-
-		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
-			"orbits": a.repo.FilterOrbits(all_orbits),
-		})
-	} else {
-		found_orbits, err := a.repo.SearchOrbits(orbit_name)
+	a.r.POST("/delete_orbit/:orbit_name", func(c *gin.Context) {
+		orbit_name := c.Param("orbit_name")
+		err := a.repo.ChangeAvailability(orbit_name)
 
 		if err != nil {
 			c.Error(err)
 			return
 		}
 
-		c.HTML(http.StatusOK, "regions.html", gin.H{
-			"regions": a.repo.FilterOrbits(found_orbits),
+		c.Redirect(http.StatusFound, "/")
+	})
+
+	a.r.Run(":8000")
+
+	log.Println("Server is down")
+}
+
+func (a *Application) loadHome(c *gin.Context) {
+	orbitName := c.Query("orbit_name")
+
+	if orbitName == "" {
+		log.Println("ALL ORBITS 1")
+
+		allOrbits, err := a.repo.GetAllOrbits()
+
+		if err != nil {
+			c.Error(err)
+		}
+
+		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+			"orbits": a.repo.FilterOrbits(allOrbits),
+		})
+	} else {
+		log.Println("!!! SEARCHING ORBITS !!!")
+
+		foundOrbits, err := a.repo.SearchOrbits(orbitName)
+
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+			"orbits":    a.repo.FilterOrbits(foundOrbits),
+			"orbitName": orbitName,
 		})
 	}
 }

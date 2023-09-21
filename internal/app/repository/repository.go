@@ -1,10 +1,9 @@
 package repository
 
 import (
+	"L1/internal/app/ds"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"L1/internal/app/ds"
 )
 
 type Repository struct {
@@ -23,36 +22,48 @@ func New(dsn string) (*Repository, error) {
 }
 
 func (r *Repository) GetOrbitByID(id int) (*ds.Orbits, error) {
-	region := &ds.Orbits{}
+	Orbit := &ds.Orbits{}
 
-	err := r.db.First(region, "id = ?", id).Error
+	err := r.db.First(Orbit, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return region, nil
+	return Orbit, nil
 }
 
-func (r *Repository) SearchOrbits(orbit_name string) ([]ds.Orbits, error) {
-	regions := []ds.Orbits{}
+func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbits, error) {
+	orbits := []ds.Orbits{}
+	orbitName = "%" + orbitName + "%"
 
-	err := r.db.Raw("select * from Orbits(?)", orbit_name).Scan(&regions).Error
+	err := r.db.Where("name ILIKE ?", orbitName).Find(&orbits).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return regions, nil
+	return orbits, nil
 }
 
-func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
-	region := &ds.Orbits{}
+func (r *Repository) DeleteOrbit(orbit_name string) error {
+	return r.db.Delete(&ds.Orbits{}, "name = ?", orbit_name).Error
+}
 
-	err := r.db.First(region, "name = ?", name).Error
-	if err != nil {
-		return nil, err
+func (r *Repository) ChangeAvailability(orbitName string) error {
+	// Получите текущее значение поля Free для указанной орбиты
+	orbit := ds.Orbits{}
+	if err := r.db.Where("name = ?", orbitName).First(&orbit).Error; err != nil {
+		return err
 	}
 
-	return region, nil
+	// Инвертируйте значение поля Free
+	orbit.Free = !orbit.Free
+
+	// Обновите значение поля Free в базе данных
+	if err := r.db.Save(&orbit).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Repository) GetAllOrbits() ([]ds.Orbits, error) {
@@ -76,6 +87,17 @@ func (r *Repository) FilterOrbits(orbits []ds.Orbits) []ds.Orbits {
 
 	return new_orbits
 
+}
+
+func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
+	orbit := &ds.Orbits{}
+
+	err := r.db.First(orbit, "name = ?", name).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return orbit, nil
 }
 
 func (r *Repository) DeleteUser(user_name string) error {

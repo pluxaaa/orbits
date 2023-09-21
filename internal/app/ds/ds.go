@@ -1,6 +1,8 @@
 package ds
 
-import "gorm.io/datatypes"
+import (
+	"gorm.io/datatypes"
+)
 
 type Users struct {
 	ID    uint `gorm:"primaryKey"`
@@ -24,6 +26,7 @@ type TransferRequest struct {
 type Orbits struct {
 	ID          uint `gorm:"primaryKey"`
 	Name        string
+	Free        bool
 	Description string
 	Image       string `gorm:"type:bytea"`
 }
