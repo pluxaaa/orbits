@@ -5,9 +5,9 @@ import (
 )
 
 type Users struct {
-	ID    uint `gorm:"primaryKey"`
-	Moder bool
-	Name  string
+	ID      uint `gorm:"primaryKey"`
+	IsModer bool
+	Name    string
 }
 
 type TransferRequest struct {
