@@ -10,17 +10,23 @@ type Users struct {
 	Name    string
 }
 
-type TransferRequest struct {
+type TransferRequests struct {
 	ID             uint `gorm:"primaryKey"`
 	ClientRefer    int
 	Client         Users `gorm:"foreignKey:ClientRefer"`
 	ModerRefer     int
 	Moder          Users `gorm:"foreignKey:ModerRefer"`
-	Status         string
+	StatusRefer    int
+	Status         RequestStatus `gorm:"foreignKey:StatusRefer"`
 	MissionPurpose string
 	DateCreated    datatypes.Date
 	DateProcessed  datatypes.Date
 	DateFinished   datatypes.Date
+}
+
+type RequestStatus struct {
+	ID     uint `gorm:"primaryKey"`
+	Status string
 }
 
 type Orbits struct {
@@ -34,10 +40,10 @@ type Orbits struct {
 	Image       string `gorm:"type:bytea"`
 }
 
-type TransferToOrbit struct {
+type TransfersToOrbit struct {
 	ID           uint `gorm:"primaryKey"`
 	RequestRefer int
-	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
+	Request      TransferRequests `gorm:"foreignKey:RequestRefer"`
 	OrbitRefer   int
 	Orbit        Orbits `gorm:"foreignKey:OrbitRefer"`
 }

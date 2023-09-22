@@ -25,7 +25,7 @@ func main() {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.TransferRequest{})
+	err = db.AutoMigrate(&ds.TransferRequests{})
 	if err != nil {
 		panic("cant migrate db")
 	}
@@ -35,7 +35,12 @@ func main() {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.TransferToOrbit{})
+	err = db.AutoMigrate(&ds.TransfersToOrbit{})
+	if err != nil {
+		panic("cant migrate db")
+	}
+
+	err = db.AutoMigrate(&ds.RequestStatus{})
 	if err != nil {
 		panic("cant migrate db")
 	}
