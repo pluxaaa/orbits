@@ -7,10 +7,9 @@
     <h1> Орбиты </h1>
 </div>
 <div class="search-form">
-    <form method="GET" action="" name="search" style="display:flex;align-items: center;">
-        <label for="orbit_name" style="float:left;margin-right: 10px;margin-left:10px">Введите название:</label>
-        <input type="text" id="orbit_name" name="orbit_name" style="float:left;margin-right: 20px;" value="{{ .orbitName }}">
-        <input type="submit" class="button card_button" value="Поиск">
+    <form method="GET" action="" name="search">
+        <input type="text" id="orbit_name" name="orbit_name" value="{{ .orbitName }}" placeholder="Введите название">
+        <input type="submit" class="button" value="Поиск">
     </form>
 </div>
 <div class="card_group">
@@ -20,10 +19,13 @@
         <div class="image-container">
             <img class="card_image" src="data:image/png;base64, {{ .Image }}" alt="картинка">
         </div>
-        <a class="button card_button" href="{{ .Name }}">Подробнее</a>
+        <div class="card_title">
+            Статус: {{if eq .IsFree true}} Доступна {{else}} Недоступна {{end}}
+        </div>
+        <a class="button" href="{{ .Name }}">Подробнее</a>
         <form method="POST" action="delete_orbit/{{ .Name }}" name="delete_orbit">
             <input type="hidden" name="card_title" id="card_title" value="{{ .Name }}">
-            <input type="submit" class="button" value="Удалить">
+            <input type="submit" class="button" value="Изменить статус">
         </form>
     </div>
     {{ end }}

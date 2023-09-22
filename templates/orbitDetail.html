@@ -10,7 +10,11 @@
     <div class="card-content-sub">
         <img src="data:image/png;base64, {{ .Image }}" class="card_image-sub">
         <div class="right-content-sub">
-            <p>{{ .Description }}</p>
+            <p>Статус: {{if eq .IsFree true}} Доступна {{else}} Недоступна {{end}}</p>
+            <p>Апогей: {{ .Apogee }}</p>
+            <p>Перигей: {{ .Perigee }}</p>
+            <p>Наклонение: {{ .Inclination }}</p>
+            <p>Описание: {{ .Description }}</p>
         </div>
     </div>
     <a class="button" href="..">Назад</a>

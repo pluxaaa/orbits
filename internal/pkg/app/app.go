@@ -74,7 +74,6 @@ func (a *Application) loadHome(c *gin.Context) {
 		log.Println("!!! SEARCHING ORBITS !!!")
 
 		foundOrbits, err := a.repo.SearchOrbits(orbitName)
-
 		if err != nil {
 			c.Error(err)
 			return
@@ -105,6 +104,10 @@ func (a *Application) loadPage(c *gin.Context) {
 		"Name":        orbit.Name,
 		"Image":       orbit.Image,
 		"Description": orbit.Description,
+		"IsFree":      orbit.IsFree,
+		"Apogee":      orbit.Apogee,
+		"Perigee":     orbit.Perigee,
+		"Inclination": orbit.Inclination,
 	})
 
 }

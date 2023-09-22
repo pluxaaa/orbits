@@ -1,6 +1,6 @@
 body {
     background-color: #f0f0f0;
-    font-family: "Century Gothic", sans-serif;
+    font-family: "Century Gothic", sans-serif; /* Установите "Century Gothic" как первый предпочтительный шрифт */
     margin: 0;
     padding: 0;
 }
@@ -63,6 +63,12 @@ body {
     align-items: flex-start;
 }
 
+.card-content-sub {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
 .card_image-sub {
     width: 400px;
     height: 300px;
@@ -77,15 +83,9 @@ body {
     margin-left: 20px;
 }
 
-.card_title-sub {
-    font-size: 20px;
-    margin: 10px 0;
-}
-
 .right-content-sub p {
     margin-top: 10px;
 }
-
 
 .card_title {
     font-size: 20px;
@@ -94,23 +94,27 @@ body {
 
 
 .button {
-    background-color: #0e3e8d;
+    background-color: #0E3E8DFF;
     color: white;
     padding: 10px 20px;
     text-decoration: none;
     border-radius: 5px;
     display: inline-block;
     margin-top: 20px;
+    font-family: "Century Gothic", sans-serif;
+    font-size: 16px;
 }
 
 .button:hover {
     background-color: #001246;
 }
 
+/* Добавьте следующий CSS, чтобы переместить форму поиска в левый верхний угол */
 .search-form {
-    text-align: center;
-    margin: 20px 0;
+    text-align: left;
+    margin: 20px 20px 0 20px;
 }
+
 
 .search-form input[type="text"] {
     padding: 10px;
@@ -119,10 +123,10 @@ body {
     font-size: 16px;
     width: 300px;
     margin-right: 10px;
+    font-family: "Century Gothic", sans-serif
 }
 
-
-.search-form button[type="submit"] {
+.search-form input[type="submit"] {
     background-color: #0e3e8d;
     color: white;
     padding: 10px 20px;
@@ -130,8 +134,10 @@ body {
     border-radius: 5px;
     font-size: 16px;
     cursor: pointer;
+    font-family: "Century Gothic", sans-serif
 }
 
-.search-form button[type="submit"]:hover {
+.search-form input[type="submit"]:hover {
     background-color: #001246;
 }
+

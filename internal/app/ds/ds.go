@@ -26,7 +26,10 @@ type TransferRequest struct {
 type Orbits struct {
 	ID          uint `gorm:"primaryKey"`
 	Name        string
-	Free        bool
+	IsFree      bool
+	Apogee      string
+	Perigee     string
+	Inclination string
 	Description string
 	Image       string `gorm:"type:bytea"`
 }
