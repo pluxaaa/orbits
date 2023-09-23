@@ -20,7 +20,7 @@
             <img class="card_image" src="data:image/png;base64, {{ .Image }}" alt="картинка">
         </div>
         <div class="card_title">
-            Статус: {{if eq .IsFree true}} Доступна {{else}} Недоступна {{end}}
+            {{if eq .IsFree true}} Доступна {{else}} Недоступна {{end}}
         </div>
         <a class="button" href="{{ .Name }}">Подробнее</a>
         <form method="POST" action="delete_orbit/{{ .Name }}" name="delete_orbit">
