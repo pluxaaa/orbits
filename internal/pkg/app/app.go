@@ -33,8 +33,8 @@ func (a *Application) StartServer() {
 	a.r.LoadHTMLGlob("templates/*.html")
 	a.r.Static("/css", "./templates")
 
-	a.r.GET("/", a.loadHome)
-	a.r.GET("/:orbit_name", a.loadPage)
+	a.r.GET("/", a.loadGeneral)
+	a.r.GET("/:orbit_name", a.loadDetail)
 
 	a.r.POST("/delete_orbit/:orbit_name", func(c *gin.Context) {
 		orbitName := c.Param("orbit_name")
@@ -55,7 +55,7 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
-func (a *Application) loadHome(c *gin.Context) {
+func (a *Application) loadGeneral(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
 
 	if orbitName == "" {
@@ -86,7 +86,7 @@ func (a *Application) loadHome(c *gin.Context) {
 	}
 }
 
-func (a *Application) loadPage(c *gin.Context) {
+func (a *Application) loadDetail(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
 	if orbit_name == "favicon.ico" {

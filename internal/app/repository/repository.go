@@ -36,7 +36,7 @@ func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbits, error) {
 	orbits := []ds.Orbits{}
 	orbitName = "%" + orbitName + "%"
 
-	err := r.db.Where("name ILIKE ?", orbitName).Find(&orbits).Error
+	err := r.db.Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (r *Repository) ChangeAvailability(orbitName string) error {
 func (r *Repository) GetAllOrbits() ([]ds.Orbits, error) {
 	orbits := []ds.Orbits{}
 
-	err := r.db.Find(&orbits).Error
+	err := r.db.Order("id").Find(&orbits).Error
 
 	if err != nil {
 		return nil, err
