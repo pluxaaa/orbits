@@ -39,7 +39,7 @@ func StartServer() {
 		{1, "Полярная орибат", Desc[1], Props[1][0], Props[1][1], Props[1][2],
 			"../resources/MEO.png", "MEO"},
 		{2, "Орбита 'Молния'", Desc[2], Props[2][0], Props[2][1], Props[2][2],
-			"../resources/LEO.png", "LEO"},
+			"../resources/Molniya.png", "LEO"},
 	}
 
 	r := gin.Default()
