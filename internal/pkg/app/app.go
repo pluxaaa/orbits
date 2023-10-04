@@ -104,7 +104,7 @@ func (a *Application) loadDetail(c *gin.Context) {
 		"Name":        orbit.Name,
 		"Image":       orbit.Image,
 		"Description": orbit.Description,
-		"IsFree":      orbit.IsFree,
+		"IsAvailable": orbit.IsAvailable,
 		"Apogee":      orbit.Apogee,
 		"Perigee":     orbit.Perigee,
 		"Inclination": orbit.Inclination,

@@ -10,7 +10,7 @@
     <div class="card-content-sub">
         <img src="data:image/png;base64, {{ .Image }}" class="card_image-sub">
         <div class="right-content-sub">
-            <p>Статус: {{if eq .IsFree true}} Доступна {{else}} Недоступна {{end}}</p>
+            <p>Статус: {{if eq .IsAvailable true}} Доступна {{else}} Недоступна {{end}}</p>
             <p>Апогей: {{ .Apogee }}</p>
             <p>Перигей: {{ .Perigee }}</p>
             <p>Наклонение: {{ .Inclination }}</p>

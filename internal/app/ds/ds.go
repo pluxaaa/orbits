@@ -1,47 +1,41 @@
 package ds
 
 import (
-	"gorm.io/datatypes"
+	"time"
 )
 
 type Users struct {
-	ID      uint `gorm:"primaryKey"`
-	IsModer bool
-	Name    string
+	ID      uint   `gorm:"primaryKey;AUTO_INCREMENT"`
+	IsModer bool   `gorm:"not null"`
+	Name    string `gorm:"type:varchar(50);unique;not null"`
 }
 
 type TransferRequests struct {
-	ID             uint `gorm:"primaryKey"`
+	ID             uint `gorm:"primaryKey;AUTO_INCREMENT"`
 	ClientRefer    int
 	Client         Users `gorm:"foreignKey:ClientRefer"`
 	ModerRefer     int
-	Moder          Users `gorm:"foreignKey:ModerRefer"`
-	StatusRefer    int
-	Status         RequestStatus `gorm:"foreignKey:StatusRefer"`
-	MissionPurpose string
-	DateCreated    datatypes.Date
-	DateProcessed  datatypes.Date
-	DateFinished   datatypes.Date
-}
-
-type RequestStatus struct {
-	ID     uint `gorm:"primaryKey"`
-	Status string
+	Moder          Users     `gorm:"foreignKey:ModerRefer"`
+	Status         string    `gorm:"type:varchar(20);not null"`
+	MissionPurpose string    `gorm:"type:varchar(50)"`
+	DateCreated    time.Time `gorm:"type:timestamp"` //timestamp without time zone
+	DateProcessed  time.Time `gorm:"type:timestamp"`
+	DateFinished   time.Time `gorm:"type:timestamp"`
 }
 
 type Orbits struct {
-	ID          uint `gorm:"primaryKey"`
-	Name        string
-	IsFree      bool
-	Apogee      string
-	Perigee     string
-	Inclination string
-	Description string
+	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
+	Name        string `gorm:"type:varchar(50)"`
+	IsAvailable bool
+	Apogee      string `gorm:"type:varchar(20)"`
+	Perigee     string `gorm:"type:varchar(20)"`
+	Inclination string `gorm:"type:varchar(20)"`
+	Description string `gorm:"type:text"`
 	Image       string `gorm:"type:bytea"`
 }
 
 type TransfersToOrbit struct {
-	ID           uint `gorm:"primaryKey"`
+	ID           uint `gorm:"primaryKey;AUTO_INCREMENT"`
 	RequestRefer int
 	Request      TransferRequests `gorm:"foreignKey:RequestRefer"`
 	OrbitRefer   int

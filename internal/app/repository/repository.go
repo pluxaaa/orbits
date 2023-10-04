@@ -49,7 +49,7 @@ func (r *Repository) DeleteOrbit(orbit_name string) error {
 }
 
 func (r *Repository) ChangeAvailability(orbitName string) error {
-	query := "UPDATE orbits SET is_free = NOT is_free WHERE Name = $1"
+	query := "UPDATE orbits SET is_available = NOT is_available WHERE Name = $1"
 
 	sqlDB, err := r.db.DB()
 	if err != nil {
