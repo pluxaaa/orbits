@@ -4,6 +4,9 @@ import (
 	"L1/internal/app/ds"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"log"
+	"math/rand"
+	"time"
 )
 
 type Repository struct {
@@ -44,11 +47,7 @@ func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbits, error) {
 	return orbits, nil
 }
 
-func (r *Repository) DeleteOrbit(orbit_name string) error {
-	return r.db.Delete(&ds.Orbits{}, "name = ?", orbit_name).Error
-}
-
-func (r *Repository) ChangeAvailability(orbitName string) error {
+func (r *Repository) ChangeOrbitStatus(orbitName string) error {
 	query := "UPDATE orbits SET is_available = NOT is_available WHERE Name = $1"
 
 	sqlDB, err := r.db.DB()
@@ -95,21 +94,86 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
 	return orbit, nil
 }
 
-func (r *Repository) AddOrbit(Name string, Apogee string, Perigee string, Inclination string, Description string) error {
-	return r.db.Create(&ds.Orbits{
-		uint(len([]ds.Orbits{})),
-		Name,
-		true,
-		Apogee,
-		Perigee,
-		Inclination,
-		Description,
-		"",
-	}).Error
+func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description string) error {
+	NewOrbit := &ds.Orbits{
+		ID:          uint(len([]ds.Orbits{})),
+		Name:        Name,
+		IsAvailable: true,
+		Apogee:      Apogee,
+		Perigee:     Perigee,
+		Inclination: Inclination,
+		Description: Description,
+		Image:       "",
+	}
+
+	return r.db.Create(NewOrbit).Error
 }
 
 func (r *Repository) EditOrbitName(oldName, newName string) error {
 	return r.db.Model(&ds.Orbits{}).Where(
 		"name", oldName).Update(
 		"name", newName).Error
+}
+
+func (r *Repository) GetCurrentRequest(client_refer int) (*ds.TransferRequests, error) {
+	request := &ds.TransferRequests{}
+	err := r.db.Where("status = ?", "Opened").First(request, "client_refer = ?", client_refer).Error
+	//если реквеста нет => err = record not found
+	if err != nil {
+		//request = nil, err = not found
+		return nil, err
+	}
+	//если реквест есть => request = record, err = nil
+	return request, nil
+}
+
+func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferRequests, error) {
+	//проверка есть ли открытая заявка у клиента
+	request, err := r.GetCurrentRequest(client_refer)
+	if err != nil {
+		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
+
+		//назначение модератора
+		users := []ds.Users{}
+		err = r.db.Where("is_moder = ?", true).Find(&users).Error
+		if err != nil {
+			return nil, err
+		}
+		n := rand.Int() % len(users)
+		moder_refer := users[n].ID
+
+		//поля типа Users, связанные с передавыемыми значениями из функции
+		client := ds.Users{ID: uint(client_refer)}
+		moder := ds.Users{ID: moder_refer}
+
+		NewTransferRequest := &ds.TransferRequests{
+			ID:            uint(len([]ds.TransferRequests{})),
+			ClientRefer:   client_refer,
+			Client:        client,
+			ModerRefer:    int(moder_refer),
+			Moder:         moder,
+			Status:        "Opened",
+			DateCreated:   time.Now(),
+			DateProcessed: nil,
+			DateFinished:  nil,
+		}
+		log.Println("!!! NEW RECORD ADDED")
+		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
+	}
+	return request, nil
+}
+
+func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
+	orbit := ds.Orbits{ID: uint(orbit_refer)}
+	request := ds.TransferRequests{ID: uint(request_refer)}
+
+	NewMtM := &ds.TransfersToOrbit{
+		ID:           uint(len([]ds.TransfersToOrbit{})),
+		Orbit:        orbit,
+		OrbitRefer:   orbit_refer,
+		Request:      request,
+		RequestRefer: request_refer,
+	}
+
+	return r.db.Create(NewMtM).Error
 }

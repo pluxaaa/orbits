@@ -11,16 +11,15 @@ type Users struct {
 }
 
 type TransferRequests struct {
-	ID             uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	ClientRefer    int
-	Client         Users `gorm:"foreignKey:ClientRefer"`
-	ModerRefer     int
-	Moder          Users     `gorm:"foreignKey:ModerRefer"`
-	Status         string    `gorm:"type:varchar(20);not null"`
-	MissionPurpose string    `gorm:"type:varchar(50)"`
-	DateCreated    time.Time `gorm:"type:timestamp"` //timestamp without time zone
-	DateProcessed  time.Time `gorm:"type:timestamp"`
-	DateFinished   time.Time `gorm:"type:timestamp"`
+	ID            uint `gorm:"primaryKey;AUTO_INCREMENT"`
+	ClientRefer   int
+	Client        Users `gorm:"foreignKey:ClientRefer"`
+	ModerRefer    int
+	Moder         Users      `gorm:"foreignKey:ModerRefer"`
+	Status        string     `gorm:"type:varchar(20);not null"`
+	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
+	DateProcessed *time.Time `gorm:"type:timestamp"`
+	DateFinished  *time.Time `gorm:"type:timestamp"`
 }
 
 type Orbits struct {

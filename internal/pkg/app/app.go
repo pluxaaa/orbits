@@ -4,10 +4,9 @@ import (
 	"L1/internal/app/ds"
 	"L1/internal/app/dsn"
 	"L1/internal/app/repository"
+	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 type Application struct {
@@ -36,22 +35,10 @@ func (a *Application) StartServer() {
 
 	a.r.GET("/", a.loadGeneral)
 	a.r.GET("/:orbit_name", a.loadDetail)
-	a.r.GET("/add_orbit", a.addOrbit)
-	a.r.GET("/edit_orbit", a.editOrbit)
-
-	a.r.POST("/delete_orbit/:orbit_name", func(c *gin.Context) {
-		orbitName := c.Param("orbit_name")
-
-		// Call the modified ChangeAvailability method
-		err := a.repo.ChangeAvailability(orbitName)
-
-		if err != nil {
-			c.Error(err)
-			return
-		}
-
-		c.Redirect(http.StatusFound, "/")
-	})
+	a.r.GET("/newOrbit", a.newOrbit)
+	a.r.GET("/editOrbit", a.editOrbit)
+	a.r.POST("/chStatusOrbit/:orbit_name", a.changeOrbitStatus)
+	a.r.GET("/:orbit_name/add", a.addOrbitToRequest)
 
 	a.r.Run(":8000")
 
@@ -115,11 +102,25 @@ func (a *Application) loadDetail(c *gin.Context) {
 
 }
 
-func (a *Application) addOrbit(c *gin.Context) {
+func (a *Application) changeOrbitStatus(c *gin.Context) {
+	orbitName := c.Param("orbit_name")
+
+	// Call the modified ChangeAvailability method
+	err := a.repo.ChangeOrbitStatus(orbitName)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.Redirect(http.StatusFound, "/")
+}
+
+func (a *Application) newOrbit(c *gin.Context) {
 	var requestBody ds.AddOrbitRequestBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
-		// error handler
+		c.Error(err)
 	}
 
 	err := a.repo.AddOrbit(requestBody.Name, requestBody.Apogee, requestBody.Perigee,
@@ -144,7 +145,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 	var requestBody ds.EditOrbitNameRequestBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
-		// error handler
+		c.Error(err)
 	}
 
 	err := a.repo.EditOrbitName(requestBody.OldName, requestBody.NewName)
@@ -158,4 +159,31 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"old_name": requestBody.OldName,
 		"new_name": requestBody.NewName,
 	})
+}
+
+func (a *Application) addOrbitToRequest(c *gin.Context) {
+	orbit_name := c.Param("orbit_name")
+
+	//получение инфы об орбите (id)
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	request := &ds.TransferRequests{}
+	request, err = a.repo.CreateTransferRequest(1)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	log.Println("REQUEST ID: ", request.ID, "\nORBIT ID: ", orbit.ID)
+
+	err = a.repo.AddTransferToOrbits(int(orbit.ID), int(request.ID))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
 }
