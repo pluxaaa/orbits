@@ -1,6 +1,7 @@
 package app
 
 import (
+	"L1/internal/app/ds"
 	"L1/internal/app/dsn"
 	"L1/internal/app/repository"
 	"log"
@@ -35,6 +36,8 @@ func (a *Application) StartServer() {
 
 	a.r.GET("/", a.loadGeneral)
 	a.r.GET("/:orbit_name", a.loadDetail)
+	a.r.GET("/add_orbit", a.addOrbit)
+	a.r.GET("/edit_orbit", a.editOrbit)
 
 	a.r.POST("/delete_orbit/:orbit_name", func(c *gin.Context) {
 		orbitName := c.Param("orbit_name")
@@ -110,4 +113,49 @@ func (a *Application) loadDetail(c *gin.Context) {
 		"Inclination": orbit.Inclination,
 	})
 
+}
+
+func (a *Application) addOrbit(c *gin.Context) {
+	var requestBody ds.AddOrbitRequestBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		// error handler
+	}
+
+	err := a.repo.AddOrbit(requestBody.Name, requestBody.Apogee, requestBody.Perigee,
+		requestBody.Inclination, requestBody.Description)
+	log.Println(requestBody.Name, " is added")
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"Name":        requestBody.Name,
+		"Apogee":      requestBody.Apogee,
+		"Perigee":     requestBody.Perigee,
+		"Inclination": requestBody.Inclination,
+		"Description": requestBody.Description,
+	})
+}
+
+func (a *Application) editOrbit(c *gin.Context) {
+	var requestBody ds.EditOrbitNameRequestBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		// error handler
+	}
+
+	err := a.repo.EditOrbitName(requestBody.OldName, requestBody.NewName)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"old_name": requestBody.OldName,
+		"new_name": requestBody.NewName,
+	})
 }

@@ -17,7 +17,7 @@
     <div class="card">
         <h5 class="card_title">{{ .Name }}</h5>
         <div class="image-container">
-            <img class="card_image" src="data:image/png;base64, {{ .Image }}" alt="картинка">
+            <!-- <img class="card_image" src="data:image/png;base64, {{ .Image }}" alt="картинка"> !-->
         </div>
         <div class="card_title">
             {{if eq .IsAvailable true}} Доступна {{else}} Недоступна {{end}}

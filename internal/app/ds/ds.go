@@ -41,3 +41,17 @@ type TransfersToOrbit struct {
 	OrbitRefer   int
 	Orbit        Orbits `gorm:"foreignKey:OrbitRefer"`
 }
+
+// JSON PARSER
+type AddOrbitRequestBody struct {
+	Name        string
+	Apogee      string
+	Perigee     string
+	Inclination string
+	Description string
+}
+
+type EditOrbitNameRequestBody struct {
+	OldName string
+	NewName string
+}

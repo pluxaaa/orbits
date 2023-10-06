@@ -94,3 +94,22 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
 
 	return orbit, nil
 }
+
+func (r *Repository) AddOrbit(Name string, Apogee string, Perigee string, Inclination string, Description string) error {
+	return r.db.Create(&ds.Orbits{
+		uint(len([]ds.Orbits{})),
+		Name,
+		true,
+		Apogee,
+		Perigee,
+		Inclination,
+		Description,
+		"",
+	}).Error
+}
+
+func (r *Repository) EditOrbitName(oldName, newName string) error {
+	return r.db.Model(&ds.Orbits{}).Where(
+		"name", oldName).Update(
+		"name", newName).Error
+}
