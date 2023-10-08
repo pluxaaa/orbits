@@ -5,8 +5,8 @@ import (
 )
 
 type Users struct {
-	ID      uint   `gorm:"primaryKey;AUTO_INCREMENT"`
-	IsModer bool   `gorm:"not null"`
+	ID      uint `gorm:"primaryKey;AUTO_INCREMENT"`
+	IsModer *bool
 	Name    string `gorm:"type:varchar(50);unique;not null"`
 }
 
@@ -16,7 +16,7 @@ type TransferRequests struct {
 	Client        Users `gorm:"foreignKey:ClientRefer"`
 	ModerRefer    int
 	Moder         Users      `gorm:"foreignKey:ModerRefer"`
-	Status        string     `gorm:"type:varchar(20);not null"`
+	Status        string     `gorm:"type:varchar(20); not null"`
 	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
 	DateProcessed *time.Time `gorm:"type:timestamp"`
 	DateFinished  *time.Time `gorm:"type:timestamp"`
@@ -42,15 +42,9 @@ type TransfersToOrbit struct {
 }
 
 // JSON PARSER
-type AddOrbitRequestBody struct {
-	Name        string
-	Apogee      string
-	Perigee     string
-	Inclination string
-	Description string
-}
 
-type EditOrbitNameRequestBody struct {
-	OldName string
-	NewName string
+type ChangeTransferStatusRequestBody struct {
+	TransferID int
+	Status     string
+	UserName   string
 }

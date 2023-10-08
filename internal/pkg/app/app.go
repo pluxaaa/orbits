@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type Application struct {
@@ -33,19 +34,25 @@ func (a *Application) StartServer() {
 	a.r.LoadHTMLGlob("templates/*.html")
 	a.r.Static("/css", "./templates")
 
-	a.r.GET("/", a.loadGeneral)
-	a.r.GET("/:orbit_name", a.loadDetail)
-	a.r.GET("/newOrbit", a.newOrbit)
-	a.r.GET("/editOrbit", a.editOrbit)
-	a.r.POST("/chStatusOrbit/:orbit_name", a.changeOrbitStatus)
-	a.r.GET("/:orbit_name/add", a.addOrbitToRequest)
+	a.r.GET("orbits", a.getAllOrbits)
+	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
+	a.r.GET("transfers", a.getAllRequests)
+	a.r.GET("transfers/:req_id", a.getDetailedRequest)
+
+	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
+	a.r.PUT("orbits/add", a.newOrbit)
+	a.r.PUT("transfers/:req_id/moder_change_status", a.moderChangeTransferStatus)
+	a.r.PUT("transfers/:req_id/client_change_status", a.clientChangeTransferStatus)
+
+	a.r.POST("/change_status/:orbit_name", a.changeOrbitStatus)
+	a.r.POST("/:orbit_name/add", a.addOrbitToRequest)
 
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
 }
 
-func (a *Application) loadGeneral(c *gin.Context) {
+func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
 
 	if orbitName == "" {
@@ -76,7 +83,7 @@ func (a *Application) loadGeneral(c *gin.Context) {
 	}
 }
 
-func (a *Application) loadDetail(c *gin.Context) {
+func (a *Application) getDetailedOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
 	if orbit_name == "favicon.ico" {
@@ -117,7 +124,7 @@ func (a *Application) changeOrbitStatus(c *gin.Context) {
 }
 
 func (a *Application) newOrbit(c *gin.Context) {
-	var requestBody ds.AddOrbitRequestBody
+	var requestBody ds.Orbits
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
@@ -142,13 +149,16 @@ func (a *Application) newOrbit(c *gin.Context) {
 }
 
 func (a *Application) editOrbit(c *gin.Context) {
-	var requestBody ds.EditOrbitNameRequestBody
+	orbit_name := c.Param("orbit_name")
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
 
-	if err := c.BindJSON(&requestBody); err != nil {
+	var editingOrbit ds.Orbits
+
+	if err := c.BindJSON(&editingOrbit); err != nil {
 		c.Error(err)
 	}
 
-	err := a.repo.EditOrbitName(requestBody.OldName, requestBody.NewName)
+	err = a.repo.EditOrbit(orbit.ID, editingOrbit)
 
 	if err != nil {
 		c.Error(err)
@@ -156,34 +166,124 @@ func (a *Application) editOrbit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"old_name": requestBody.OldName,
-		"new_name": requestBody.NewName,
+		"ID":          editingOrbit.ID,
+		"Name":        editingOrbit.Name,
+		"IsAvailable": editingOrbit.IsAvailable,
+		"Apogee":      editingOrbit.Apogee,
+		"Perigee":     editingOrbit.Perigee,
+		"Inclination": editingOrbit.Inclination,
+		"Description": editingOrbit.Description,
 	})
 }
 
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
-	//получение инфы об орбите (id)
+	//получение инфы об орбите -> orbit.ID
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
-
 	if err != nil {
 		c.Error(err)
 		return
 	}
+
+	// вместо структуры для json использую map
+	// map: key-value
+	// jsonMap: string-int
+	// можно использовать string-interface{} (определяемый тип, в данном случае - пустой)
+	// тогда будет jsonMap["client_id"].int
+	var jsonMap map[string]int
+
+	if err = c.BindJSON(&jsonMap); err != nil {
+		c.Error(err)
+		return
+	}
+	log.Println("c_id: ", jsonMap)
 
 	request := &ds.TransferRequests{}
-	request, err = a.repo.CreateTransferRequest(1)
+	request, err = a.repo.CreateTransferRequest(jsonMap["client_id"])
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	log.Println("REQUEST ID: ", request.ID, "\nORBIT ID: ", orbit.ID)
 
 	err = a.repo.AddTransferToOrbits(int(orbit.ID), int(request.ID))
 	if err != nil {
 		c.Error(err)
 		return
 	}
+}
 
+func (a *Application) getAllRequests(c *gin.Context) {
+	requests, err := a.repo.GetAllRequests()
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusFound, requests)
+}
+
+func (a *Application) getDetailedRequest(c *gin.Context) {
+	req_id, err := strconv.Atoi(c.Param("req_id"))
+	if err != nil {
+		// ... handle error
+		panic(err)
+	}
+
+	requests, err := a.repo.GetRequestByID(req_id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusFound, requests)
+}
+
+func (a *Application) moderChangeTransferStatus(c *gin.Context) {
+	var requestBody ds.ChangeTransferStatusRequestBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		return
+	}
+
+	user_isModer, err := a.repo.GetUserRole(requestBody.UserName)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	if *user_isModer != true {
+		c.String(http.StatusBadRequest, "У пользователя должна быть роль модератора")
+		return
+	}
+
+	err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+}
+
+func (a *Application) clientChangeTransferStatus(c *gin.Context) {
+	var requestBody ds.ChangeTransferStatusRequestBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		return
+	}
+
+	err := a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
 }

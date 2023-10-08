@@ -24,15 +24,31 @@ func New(dsn string) (*Repository, error) {
 	}, nil
 }
 
-func (r *Repository) GetOrbitByID(id int) (*ds.Orbits, error) {
-	Orbit := &ds.Orbits{}
+// ---------------------------------------------------------------------------------
+// --------------------------------- ORBIT METHODS ---------------------------------
+// ---------------------------------------------------------------------------------
 
-	err := r.db.First(Orbit, "id = ?", id).Error
+func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
+	orbit := &ds.Orbits{}
+
+	err := r.db.First(orbit, "name = ?", name).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return Orbit, nil
+	return orbit, nil
+}
+
+func (r *Repository) GetAllOrbits() ([]ds.Orbits, error) {
+	orbits := []ds.Orbits{}
+
+	err := r.db.Order("id").Find(&orbits).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return orbits, nil
 }
 
 func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbits, error) {
@@ -60,18 +76,6 @@ func (r *Repository) ChangeOrbitStatus(orbitName string) error {
 	return err
 }
 
-func (r *Repository) GetAllOrbits() ([]ds.Orbits, error) {
-	orbits := []ds.Orbits{}
-
-	err := r.db.Order("id").Find(&orbits).Error
-
-	if err != nil {
-		return nil, err
-	}
-
-	return orbits, nil
-}
-
 func (r *Repository) FilterOrbits(orbits []ds.Orbits) []ds.Orbits {
 	var new_orbits = []ds.Orbits{}
 
@@ -83,22 +87,11 @@ func (r *Repository) FilterOrbits(orbits []ds.Orbits) []ds.Orbits {
 
 }
 
-func (r *Repository) GetOrbitByName(name string) (*ds.Orbits, error) {
-	orbit := &ds.Orbits{}
-
-	err := r.db.First(orbit, "name = ?", name).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return orbit, nil
-}
-
 func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description string) error {
 	NewOrbit := &ds.Orbits{
 		ID:          uint(len([]ds.Orbits{})),
 		Name:        Name,
-		IsAvailable: true,
+		IsAvailable: false,
 		Apogee:      Apogee,
 		Perigee:     Perigee,
 		Inclination: Inclination,
@@ -109,15 +102,46 @@ func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description st
 	return r.db.Create(NewOrbit).Error
 }
 
-func (r *Repository) EditOrbitName(oldName, newName string) error {
-	return r.db.Model(&ds.Orbits{}).Where(
-		"name", oldName).Update(
-		"name", newName).Error
+func (r *Repository) EditOrbit(orbitID uint, orbit ds.Orbits) error {
+	log.Println("FUNC ORBIT: ", orbit, "    ", orbitID)
+	return r.db.Model(&ds.Orbits{}).Where("id = ?", orbitID).Updates(orbit).Error
+}
+
+// =================================================================================
+// ---------------------------------------------------------------------------------
+// --------------------------- TRANSFER_REQUESTS METHODS ---------------------------
+// ---------------------------------------------------------------------------------
+
+func (r *Repository) GetAllRequests() ([]ds.TransferRequests, error) {
+
+	requests := []ds.TransferRequests{}
+
+	err := r.db.
+		Preload("Client").Preload("Moder"). //данные для полей типа User: {ID, Name, IsModer)
+		Order("id").
+		Find(&requests).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
+}
+
+func (r *Repository) GetRequestByID(id int) (*ds.TransferRequests, error) {
+	request := &ds.TransferRequests{}
+
+	err := r.db.First(request, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return request, nil
 }
 
 func (r *Repository) GetCurrentRequest(client_refer int) (*ds.TransferRequests, error) {
 	request := &ds.TransferRequests{}
-	err := r.db.Where("status = ?", "Opened").First(request, "client_refer = ?", client_refer).Error
+	err := r.db.Where("status = ?", "Черновик").First(request, "client_refer = ?", client_refer).Error
 	//если реквеста нет => err = record not found
 	if err != nil {
 		//request = nil, err = not found
@@ -141,6 +165,7 @@ func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferReques
 		}
 		n := rand.Int() % len(users)
 		moder_refer := users[n].ID
+		log.Println("moder: ", moder_refer)
 
 		//поля типа Users, связанные с передавыемыми значениями из функции
 		client := ds.Users{ID: uint(client_refer)}
@@ -152,16 +177,24 @@ func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferReques
 			Client:        client,
 			ModerRefer:    int(moder_refer),
 			Moder:         moder,
-			Status:        "Opened",
+			Status:        "Черновик",
 			DateCreated:   time.Now(),
 			DateProcessed: nil,
 			DateFinished:  nil,
 		}
-		log.Println("!!! NEW RECORD ADDED")
 		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
 	}
 	return request, nil
 }
+
+func (r *Repository) ChangeRequestStatus(id int, status string) error {
+	return r.db.Model(&ds.TransferRequests{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// =================================================================================
+// ---------------------------------------------------------------------------------
+// ------------------------- TRANSFERS_TO_ORBITS METHODS ---------------------------
+// ---------------------------------------------------------------------------------
 
 func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
 	orbit := ds.Orbits{ID: uint(orbit_refer)}
@@ -174,6 +207,21 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
 		Request:      request,
 		RequestRefer: request_refer,
 	}
-
 	return r.db.Create(NewMtM).Error
+}
+
+// =================================================================================
+// ---------------------------------------------------------------------------------
+// --------------------------------- USERS METHODS ---------------------------------
+// ---------------------------------------------------------------------------------
+
+func (r *Repository) GetUserRole(name string) (*bool, error) {
+	user := &ds.Users{}
+
+	err := r.db.First(user, "name = ?", name).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return user.IsModer, nil
 }
