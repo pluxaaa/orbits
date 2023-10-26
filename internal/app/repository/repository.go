@@ -87,7 +87,7 @@ func (r *Repository) FilterOrbits(orbits []ds.Orbits) []ds.Orbits {
 
 }
 
-func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description string) error {
+func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description, Image string) error {
 	NewOrbit := &ds.Orbits{
 		ID:          uint(len([]ds.Orbits{})),
 		Name:        Name,
@@ -96,7 +96,7 @@ func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description st
 		Perigee:     Perigee,
 		Inclination: Inclination,
 		Description: Description,
-		Image:       "",
+		Image:       Image,
 	}
 
 	return r.db.Create(NewOrbit).Error
@@ -139,6 +139,22 @@ func (r *Repository) GetRequestByID(id int) (*ds.TransferRequests, error) {
 	return request, nil
 }
 
+func (r *Repository) GetRequestsByStatus(status string) ([]ds.TransferRequests, error) {
+	requests := []ds.TransferRequests{}
+
+	err := r.db.
+		Preload("Client").Preload("Moder"). //данные для полей типа User: {ID, Name, IsModer)
+		Order("id").
+		Find(&requests).Where("status = ?", status).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
+}
+
+// попытка получить заявку для конкретного клиента со статусом Черновик
 func (r *Repository) GetCurrentRequest(client_refer int) (*ds.TransferRequests, error) {
 	request := &ds.TransferRequests{}
 	err := r.db.Where("status = ?", "Черновик").First(request, "client_refer = ?", client_refer).Error
@@ -208,6 +224,15 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
 		RequestRefer: request_refer,
 	}
 	return r.db.Create(NewMtM).Error
+}
+
+// удаляет одну запись за раз
+func (r *Repository) DeleteTransferToOrbit(transfer_id int, orbit_id int) (error, error) {
+	if r.db.Where("request_refer = ?", transfer_id).First(&ds.TransfersToOrbit{}).Error != nil ||
+		r.db.Where("request_refer = ?", transfer_id).First(&ds.TransfersToOrbit{}).Error != nil {
+		return r.db.Where("request_refer = ?", transfer_id).First(&ds.TransfersToOrbit{}).Error, r.db.Where("request_refer = ?", transfer_id).First(&ds.TransfersToOrbit{}).Error
+	}
+	return r.db.Where("request_refer = ?", transfer_id).Where("orbit_refer = ?", orbit_id).Delete(&ds.TransfersToOrbit{}).Error, nil
 }
 
 // =================================================================================

@@ -37,7 +37,8 @@ func (a *Application) StartServer() {
 	a.r.GET("orbits", a.getAllOrbits)
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
 	a.r.GET("transfers", a.getAllRequests)
-	a.r.GET("transfers/:req_id", a.getDetailedRequest)
+	a.r.GET("transfers/id/:req_id", a.getDetailedRequest)
+	a.r.GET("transfers/status/:status", a.getRequestsByStatus)
 
 	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
 	a.r.PUT("orbits/add", a.newOrbit)
@@ -46,6 +47,8 @@ func (a *Application) StartServer() {
 
 	a.r.POST("/change_status/:orbit_name", a.changeOrbitStatus)
 	a.r.POST("/:orbit_name/add", a.addOrbitToRequest)
+
+	a.r.DELETE("/transfer_to_orbit/delete", a.deleteTransferToOrbit)
 
 	a.r.Run(":8000")
 
@@ -131,7 +134,7 @@ func (a *Application) newOrbit(c *gin.Context) {
 	}
 
 	err := a.repo.AddOrbit(requestBody.Name, requestBody.Apogee, requestBody.Perigee,
-		requestBody.Inclination, requestBody.Description)
+		requestBody.Inclination, requestBody.Description, requestBody.Image)
 	log.Println(requestBody.Name, " is added")
 
 	if err != nil {
@@ -176,6 +179,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 	})
 }
 
+// в json надо послать айди клиента
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -185,7 +189,6 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-
 	// вместо структуры для json использую map
 	// map: key-value
 	// jsonMap: string-int
@@ -240,6 +243,18 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 	c.JSON(http.StatusFound, requests)
 }
 
+func (a *Application) getRequestsByStatus(c *gin.Context) {
+	req_status := c.Param("req_status")
+
+	requests, err := a.repo.GetRequestsByStatus(req_status)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusFound, requests)
+}
+
 func (a *Application) moderChangeTransferStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -270,6 +285,7 @@ func (a *Application) moderChangeTransferStatus(c *gin.Context) {
 	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
 }
 
+// надо ли делать проверку является ли пользователь клиентом?
 func (a *Application) clientChangeTransferStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -286,4 +302,25 @@ func (a *Application) clientChangeTransferStatus(c *gin.Context) {
 	}
 
 	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+}
+
+// удаление записи (одной) из м-м по двум айди
+func (a *Application) deleteTransferToOrbit(c *gin.Context) {
+	var requestBody ds.TransfersToOrbit
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		return
+	}
+
+	err1, err2 := a.repo.DeleteTransferToOrbit(requestBody.RequestRefer, requestBody.OrbitRefer)
+
+	if err1 != nil || err2 != nil {
+		c.Error(err1)
+		c.Error(err2)
+		c.String(http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	c.String(http.StatusCreated, "Transfer-to-Orbit m-m was deleted")
 }
