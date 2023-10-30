@@ -67,7 +67,13 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 			c.Error(err)
 		}
 
-		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+		//для лаб3 нужен хтмл
+		//c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+		//	"orbits": a.repo.FilterOrbits(allOrbits),
+		//})
+
+		//для лаб4 нужен жсон
+		c.JSON(http.StatusOK, gin.H{
 			"orbits": a.repo.FilterOrbits(allOrbits),
 		})
 	} else {
@@ -79,7 +85,14 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 			return
 		}
 
-		c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+		//для лаб3 нужен хтмл
+		//c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
+		//	"orbits":    a.repo.FilterOrbits(foundOrbits),
+		//	"orbitName": orbitName,
+		//})
+
+		//для лаб4 нужен жсон
+		c.JSON(http.StatusOK, gin.H{
 			"orbits":    a.repo.FilterOrbits(foundOrbits),
 			"orbitName": orbitName,
 		})

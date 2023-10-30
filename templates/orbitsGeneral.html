@@ -22,7 +22,7 @@
         <div class="card_title">
             {{if eq .IsAvailable true}} Доступна {{else}} Недоступна {{end}}
         </div>
-        <a class="button" href="{{ .Name }}">Подробнее</a>
+        <a class="button" href="orbits/{{ .Name }}">Подробнее</a>
         <form method="POST" action="chStatusOrbit/{{ .Name }}" name="changeOrbitStatus">
             <input type="hidden" name="card_title" id="card_title" value="{{ .Name }}">
             <input type="submit" class="button" value="Изменить статус">
