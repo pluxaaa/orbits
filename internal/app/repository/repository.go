@@ -2,10 +2,16 @@ package repository
 
 import (
 	"L1/internal/app/ds"
+	mClient "L1/internal/app/minio"
+	"context"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -16,7 +22,19 @@ type Repository struct {
 func New(dsn string) (*Repository, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
+		log.Printf("Failed to connect to the database: %v", err)
 		return nil, err
+	}
+
+	// Check the connection
+	if sqlDB, err := db.DB(); err != nil {
+		log.Printf("Failed to initialize the database connection: %v", err)
+		return nil, err
+	} else {
+		if err := sqlDB.Ping(); err != nil {
+			log.Printf("Failed to ping the database: %v", err)
+			return nil, err
+		}
 	}
 
 	return &Repository{
@@ -87,19 +105,40 @@ func (r *Repository) FilterOrbits(orbits []ds.Orbit) []ds.Orbit {
 
 }
 
-func (r *Repository) AddOrbit(Name, Apogee, Perigee, Inclination, Description, Image string) error {
-	NewOrbit := &ds.Orbit{
-		ID:          uint(len([]ds.Orbit{})),
-		Name:        Name,
-		IsAvailable: false,
-		Apogee:      Apogee,
-		Perigee:     Perigee,
-		Inclination: Inclination,
-		Description: Description,
-		Image:       Image,
+func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
+	// Загрузка изображения в Minio и получение URL
+	imageURL, err := r.uploadImageToMinio(imagePath)
+	if err != nil {
+		return err
 	}
 
-	return r.db.Create(NewOrbit).Error
+	orbit.ImageURL = imageURL
+
+	// Добавление орбиты с путем к изображению
+	return r.db.Create(orbit).Error
+}
+
+func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
+	// Получаем клиента Minio из настроек
+	minioClient := mClient.NewMinioClient()
+
+	// Загрузка изображения в Minio
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Генерация уникального имени объекта в Minio (например, используя UUID)
+	objectName := uuid.New().String() + ".jpg"
+
+	_, err = minioClient.PutObject(context.Background(), "pc-bucket", objectName, file, -1, minio.PutObjectOptions{})
+	if err != nil {
+		return "!!!", err
+	}
+
+	// Возврат URL изображения в Minio
+	return fmt.Sprintf("http://%s/%s/%s", minioClient.EndpointURL().Host, "pc-bucket", objectName), nil
 }
 
 func (r *Repository) EditOrbit(orbitID uint, orbit ds.Orbit) error {

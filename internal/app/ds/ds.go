@@ -39,7 +39,7 @@ type Orbit struct {
 	Perigee     string `gorm:"type:varchar(20)"`
 	Inclination string `gorm:"type:varchar(20)"`
 	Description string `gorm:"type:text"`
-	Image       string `gorm:"type:bytea"`
+	ImageURL    string `gorm:"column:image"`
 }
 
 type TransferToOrbit struct {

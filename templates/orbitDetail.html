@@ -8,7 +8,7 @@
 </div>
 <div class="card-sub">
     <div class="card-content-sub">
-        <<img class="card_image" src="data:image/png;base64, {{ .Image }}" alt="картинка"> >
+        <img class="card_image" src="{{ .ImageURL }}" alt="{{ .Name }}">
         <div class="right-content-sub">
             <p>Статус: {{if eq .IsAvailable true}} Доступна {{else}} Недоступна {{end}}</p>
             <p>Апогей: {{ .Apogee }}</p>

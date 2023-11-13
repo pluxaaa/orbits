@@ -112,25 +112,24 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-
 	//c.HTML(http.StatusOK, "orbitDetail.html", gin.H{
 	//	"Name":        orbit.Name,
-	//	"Image":       orbit.Image,
-	//	"Description": orbit.Description,
 	//	"IsAvailable": orbit.IsAvailable,
 	//	"Apogee":      orbit.Apogee,
 	//	"Perigee":     orbit.Perigee,
 	//	"Inclination": orbit.Inclination,
+	//	"Description": orbit.Description,
+	//	"ImageURL":    orbit.ImageURL,
 	//})
 
 	c.JSON(http.StatusOK, gin.H{
 		"Name":        orbit.Name,
-		"Image":       orbit.Image,
-		"Description": orbit.Description,
 		"IsAvailable": orbit.IsAvailable,
 		"Apogee":      orbit.Apogee,
 		"Perigee":     orbit.Perigee,
 		"Inclination": orbit.Inclination,
+		"Description": orbit.Description,
+		"ImageURL":    orbit.ImageURL,
 	})
 
 }
@@ -155,11 +154,10 @@ func (a *Application) newOrbit(c *gin.Context) {
 	var requestBody ds.Orbit
 
 	if err := c.BindJSON(&requestBody); err != nil {
+		log.Println("ERROR")
 		c.Error(err)
 	}
-
-	err := a.repo.AddOrbit(requestBody.Name, requestBody.Apogee, requestBody.Perigee,
-		requestBody.Inclination, requestBody.Description, requestBody.Image)
+	err := a.repo.AddOrbit(&requestBody, requestBody.ImageURL)
 	log.Println(requestBody.Name, " is added")
 
 	if err != nil {
@@ -174,7 +172,7 @@ func (a *Application) newOrbit(c *gin.Context) {
 		"Perigee":     requestBody.Perigee,
 		"Inclination": requestBody.Inclination,
 		"Description": requestBody.Description,
-		"Image":       requestBody.Image,
+		"ImageURL":    requestBody.ImageURL,
 	})
 }
 
@@ -203,7 +201,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"Perigee":     editingOrbit.Perigee,
 		"Inclination": editingOrbit.Inclination,
 		"Description": editingOrbit.Description,
-		"Image":       editingOrbit.Image,
+		"ImageURL":    editingOrbit.ImageURL,
 	})
 }
 
