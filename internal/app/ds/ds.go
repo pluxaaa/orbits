@@ -4,10 +4,11 @@ import (
 	"time"
 )
 
-type Users struct {
-	ID      uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	IsModer *bool
-	Name    string `gorm:"type:varchar(50);unique;not null"`
+type User struct {
+	ID       uint `gorm:"primaryKey;AUTO_INCREMENT"`
+	IsModer  *bool
+	Name     string `gorm:"type:varchar(50);unique;not null"`
+	Password string `gorm:"type:varchar(50);not null"`
 }
 
 /*
@@ -18,19 +19,19 @@ type Users struct {
 4. Оказана - одобрена модератором (завершена успешно)
 5. Отклонена - не одобрена модератором (завершена неуспешно)
 */
-type TransferRequests struct {
+type TransferRequest struct {
 	ID            uint `gorm:"primaryKey;AUTO_INCREMENT"`
 	ClientRefer   int
-	Client        Users `gorm:"foreignKey:ClientRefer"`
+	Client        User `gorm:"foreignKey:ClientRefer"`
 	ModerRefer    int
-	Moder         Users      `gorm:"foreignKey:ModerRefer"`
+	Moder         User       `gorm:"foreignKey:ModerRefer"`
 	Status        string     `gorm:"type:varchar(20); not null"`
 	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
 	DateProcessed *time.Time `gorm:"type:timestamp"`
 	DateFinished  *time.Time `gorm:"type:timestamp"`
 }
 
-type Orbits struct {
+type Orbit struct {
 	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
 	Name        string `gorm:"type:varchar(50)"`
 	IsAvailable bool
@@ -41,12 +42,12 @@ type Orbits struct {
 	Image       string `gorm:"type:bytea"`
 }
 
-type TransfersToOrbit struct {
+type TransferToOrbit struct {
 	ID           uint `gorm:"primaryKey;AUTO_INCREMENT"`
 	RequestRefer int
-	Request      TransferRequests `gorm:"foreignKey:RequestRefer"`
+	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
 	OrbitRefer   int
-	Orbit        Orbits `gorm:"foreignKey:OrbitRefer"`
+	Orbit        Orbit `gorm:"foreignKey:OrbitRefer"`
 }
 
 // JSON PARSER

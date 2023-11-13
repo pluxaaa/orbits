@@ -20,22 +20,22 @@ func main() {
 
 	// Migrate the schema
 
-	err = db.AutoMigrate(&ds.Users{})
+	err = db.AutoMigrate(&ds.User{})
 	if err != nil {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.TransferRequests{})
+	err = db.AutoMigrate(&ds.TransferRequest{})
 	if err != nil {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.Orbits{})
+	err = db.AutoMigrate(&ds.Orbit{})
 	if err != nil {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.TransfersToOrbit{})
+	err = db.AutoMigrate(&ds.TransferToOrbit{})
 	if err != nil {
 		panic("cant migrate db")
 	}

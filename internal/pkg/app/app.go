@@ -36,17 +36,16 @@ func (a *Application) StartServer() {
 
 	a.r.GET("orbits", a.getAllOrbits)
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
-	a.r.GET("transfers", a.getAllRequests)
-	a.r.GET("transfers/id/:req_id", a.getDetailedRequest)
-	a.r.GET("transfers/status/:status", a.getRequestsByStatus)
-
 	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
-	a.r.PUT("orbits/add", a.newOrbit)
-	a.r.PUT("transfers/:req_id/moder_change_status", a.moderChangeTransferStatus)
-	a.r.PUT("transfers/:req_id/client_change_status", a.clientChangeTransferStatus)
+	a.r.PUT("orbits/new_orbit", a.newOrbit)
+	a.r.POST("orbits/change_status/:orbit_name", a.changeOrbitStatus)
+	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
 
-	a.r.POST("/change_status/:orbit_name", a.changeOrbitStatus)
-	a.r.POST("/:orbit_name/add", a.addOrbitToRequest)
+	a.r.GET("transfer_requests", a.getAllRequests)
+	a.r.GET("transfer_requests/id/:req_id", a.getDetailedRequest)
+	a.r.GET("transfer_requests/status/:status", a.getRequestsByStatus)
+	a.r.PUT("transfer_requests/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
+	a.r.PUT("transfer_requests/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
 
 	a.r.DELETE("/transfer_to_orbit/delete", a.deleteTransferToOrbit)
 
@@ -84,6 +83,7 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 			c.Error(err)
 			return
 		}
+		log.Println("found: ", len(foundOrbits))
 
 		//для лаб3 нужен хтмл
 		//c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
@@ -113,7 +113,17 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "orbitDetail.html", gin.H{
+	//c.HTML(http.StatusOK, "orbitDetail.html", gin.H{
+	//	"Name":        orbit.Name,
+	//	"Image":       orbit.Image,
+	//	"Description": orbit.Description,
+	//	"IsAvailable": orbit.IsAvailable,
+	//	"Apogee":      orbit.Apogee,
+	//	"Perigee":     orbit.Perigee,
+	//	"Inclination": orbit.Inclination,
+	//})
+
+	c.JSON(http.StatusOK, gin.H{
 		"Name":        orbit.Name,
 		"Image":       orbit.Image,
 		"Description": orbit.Description,
@@ -127,20 +137,22 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 func (a *Application) changeOrbitStatus(c *gin.Context) {
 	orbitName := c.Param("orbit_name")
+	log.Println("orbitName : ", orbitName)
 
 	// Call the modified ChangeAvailability method
 	err := a.repo.ChangeOrbitStatus(orbitName)
+	log.Println("err : ", err)
 
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.Redirect(http.StatusFound, "/")
+	c.Redirect(http.StatusFound, "/orbits")
 }
 
 func (a *Application) newOrbit(c *gin.Context) {
-	var requestBody ds.Orbits
+	var requestBody ds.Orbit
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
@@ -156,11 +168,13 @@ func (a *Application) newOrbit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"ID":          requestBody.ID,
 		"Name":        requestBody.Name,
 		"Apogee":      requestBody.Apogee,
 		"Perigee":     requestBody.Perigee,
 		"Inclination": requestBody.Inclination,
 		"Description": requestBody.Description,
+		"Image":       requestBody.Image,
 	})
 }
 
@@ -168,7 +182,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
 
-	var editingOrbit ds.Orbits
+	var editingOrbit ds.Orbit
 
 	if err := c.BindJSON(&editingOrbit); err != nil {
 		c.Error(err)
@@ -189,6 +203,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"Perigee":     editingOrbit.Perigee,
 		"Inclination": editingOrbit.Inclination,
 		"Description": editingOrbit.Description,
+		"Image":       editingOrbit.Image,
 	})
 }
 
@@ -215,7 +230,7 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	}
 	log.Println("c_id: ", jsonMap)
 
-	request := &ds.TransferRequests{}
+	request := &ds.TransferRequest{}
 	request, err = a.repo.CreateTransferRequest(jsonMap["client_id"])
 	if err != nil {
 		c.Error(err)
@@ -268,7 +283,7 @@ func (a *Application) getRequestsByStatus(c *gin.Context) {
 	c.JSON(http.StatusFound, requests)
 }
 
-func (a *Application) moderChangeTransferStatus(c *gin.Context) {
+func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
@@ -299,7 +314,7 @@ func (a *Application) moderChangeTransferStatus(c *gin.Context) {
 }
 
 // надо ли делать проверку является ли пользователь клиентом?
-func (a *Application) clientChangeTransferStatus(c *gin.Context) {
+func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
@@ -319,7 +334,7 @@ func (a *Application) clientChangeTransferStatus(c *gin.Context) {
 
 // удаление записи (одной) из м-м по двум айди
 func (a *Application) deleteTransferToOrbit(c *gin.Context) {
-	var requestBody ds.TransfersToOrbit
+	var requestBody ds.TransferToOrbit
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
