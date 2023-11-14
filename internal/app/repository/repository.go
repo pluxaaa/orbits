@@ -5,13 +5,13 @@ import (
 	mClient "L1/internal/app/minio"
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"log"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -50,6 +50,17 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbit, error) {
 	orbit := &ds.Orbit{}
 
 	err := r.db.First(orbit, "name = ?", name).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return orbit, nil
+}
+
+func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
+	orbit := &ds.Orbit{}
+
+	err := r.db.First(orbit, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -106,31 +117,69 @@ func (r *Repository) FilterOrbits(orbits []ds.Orbit) []ds.Orbit {
 }
 
 func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
-	// Загрузка изображения в Minio и получение URL
-	imageURL, err := r.uploadImageToMinio(imagePath)
+	imageURL := "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg"
+	log.Println(imagePath)
+	if imagePath != "" {
+		var err error
+		imageURL, err = r.uploadImageToMinio(imagePath)
+		if err != nil {
+			return err
+		}
+	}
+	allOrbits, err := r.GetAllOrbits()
+	if err != nil {
+		log.Println(err)
+	}
+
+	orbit.ImageURL = imageURL
+	orbit.ID = uint(len(allOrbits)) + 1
+	log.Println("NEW ID: ", orbit.ID)
+	return r.db.Create(orbit).Error
+}
+
+func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
+	// Проверяем, изменился ли URL изображения
+	originalOrbit, err := r.GetOrbitByID(orbitID)
 	if err != nil {
 		return err
 	}
 
-	orbit.ImageURL = imageURL
+	log.Println("OLD IMAGE: ", originalOrbit.ImageURL)
+	log.Println("NEW IMAGE: ", editingOrbit.ImageURL)
 
-	// Добавление орбиты с путем к изображению
-	return r.db.Create(orbit).Error
+	if editingOrbit.ImageURL != originalOrbit.ImageURL && editingOrbit.ImageURL != "" {
+		log.Println("REPLACING IMAGE")
+		err := r.deleteImageFromMinio(originalOrbit.ImageURL)
+		if err != nil {
+			return err
+		}
+		imageURL, err := r.uploadImageToMinio(editingOrbit.ImageURL)
+		if err != nil {
+			return err
+		}
+
+		editingOrbit.ImageURL = imageURL
+
+		log.Println("IMAGE REPLACED")
+	}
+
+	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
-	// Получаем клиента Minio из настроек
 	minioClient := mClient.NewMinioClient()
 
 	// Загрузка изображения в Minio
 	file, err := os.Open(imagePath)
 	if err != nil {
-		return "", err
+		return "!!!", err
 	}
 	defer file.Close()
 
-	// Генерация уникального имени объекта в Minio (например, используя UUID)
-	objectName := uuid.New().String() + ".jpg"
+	// uuid - уникальное имя; parts - имя файла
+	//objectName := uuid.New().String() + ".jpg"
+	parts := strings.Split(imagePath, "/")
+	objectName := parts[len(parts)-1]
 
 	_, err = minioClient.PutObject(context.Background(), "pc-bucket", objectName, file, -1, minio.PutObjectOptions{})
 	if err != nil {
@@ -141,9 +190,18 @@ func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
 	return fmt.Sprintf("http://%s/%s/%s", minioClient.EndpointURL().Host, "pc-bucket", objectName), nil
 }
 
-func (r *Repository) EditOrbit(orbitID uint, orbit ds.Orbit) error {
-	log.Println("FUNC ORBIT: ", orbit, "    ", orbitID)
-	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(orbit).Error
+func (r *Repository) deleteImageFromMinio(imageURL string) error {
+	minioClient := mClient.NewMinioClient()
+
+	objectName := extractObjectNameFromURL(imageURL)
+
+	return minioClient.RemoveObject(context.Background(), "pc-bucket", objectName, minio.RemoveObjectOptions{})
+}
+
+func extractObjectNameFromURL(imageURL string) string {
+	parts := strings.Split(imageURL, "/")
+	log.Println("\n\nIMG:   ", parts[len(parts)-1])
+	return parts[len(parts)-1]
 }
 
 // =================================================================================

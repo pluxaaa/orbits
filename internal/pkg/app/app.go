@@ -37,7 +37,7 @@ func (a *Application) StartServer() {
 	a.r.GET("orbits", a.getAllOrbits)
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
 	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
-	a.r.PUT("orbits/new_orbit", a.newOrbit)
+	a.r.POST("orbits/new_orbit", a.newOrbit)
 	a.r.POST("orbits/change_status/:orbit_name", a.changeOrbitStatus)
 	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
 
@@ -157,6 +157,8 @@ func (a *Application) newOrbit(c *gin.Context) {
 		log.Println("ERROR")
 		c.Error(err)
 	}
+
+	log.Println("REQ BODY:    ", requestBody.ImageURL)
 	err := a.repo.AddOrbit(&requestBody, requestBody.ImageURL)
 	log.Println(requestBody.Name, " is added")
 
