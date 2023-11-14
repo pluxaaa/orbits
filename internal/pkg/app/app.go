@@ -40,6 +40,7 @@ func (a *Application) StartServer() {
 	a.r.POST("orbits/new_orbit", a.newOrbit)
 	a.r.POST("orbits/change_status/:orbit_name", a.changeOrbitStatus)
 	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
+	a.r.DELETE("orbits/:orbit_name/delete", a.deleteOrbit)
 
 	a.r.GET("transfer_requests", a.getAllRequests)
 	a.r.GET("transfer_requests/:req_id", a.getDetailedRequest)
@@ -108,7 +109,6 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 	}
 
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
-
 	if err != nil {
 		c.Error(err)
 		return
@@ -206,6 +206,22 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"Description": editingOrbit.Description,
 		"ImageURL":    editingOrbit.ImageURL,
 	})
+}
+
+func (a *Application) deleteOrbit(c *gin.Context) {
+	orbit_name := c.Param("orbit_name")
+
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	err = a.repo.DeleteOrbit(orbit.ID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
 }
 
 // в json надо послать айди клиента

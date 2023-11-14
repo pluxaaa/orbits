@@ -166,6 +166,23 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
+// VERY BAD; CHANGE LATER
+func (r *Repository) DeleteOrbit(orbitID uint) error {
+	if r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error != nil {
+		return r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error
+	}
+
+	if r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error == nil {
+		if r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error != nil {
+			return r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error
+		}
+	} else {
+		return r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error
+	}
+
+	return r.db.Where("id = ?", orbitID).Delete(&ds.Orbit{}).Error
+}
+
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
 	minioClient := mClient.NewMinioClient()
 
