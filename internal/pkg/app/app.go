@@ -42,12 +42,13 @@ func (a *Application) StartServer() {
 	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
 
 	a.r.GET("transfer_requests", a.getAllRequests)
-	a.r.GET("transfer_requests/id/:req_id", a.getDetailedRequest)
+	a.r.GET("transfer_requests/:req_id", a.getDetailedRequest)
 	a.r.GET("transfer_requests/status/:status", a.getRequestsByStatus)
 	a.r.PUT("transfer_requests/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
 	a.r.PUT("transfer_requests/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
+	a.r.POST("transfer_requests/:req_id/delete", a.deleteTransferRequest)
 
-	a.r.DELETE("/transfer_to_orbit/delete", a.deleteTransferToOrbit)
+	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 
 	a.r.Run(":8000")
 
@@ -332,16 +333,36 @@ func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
 }
 
+func (a *Application) deleteTransferRequest(c *gin.Context) {
+	req_id, err1 := strconv.Atoi(c.Param("req_id"))
+	if err1 != nil {
+		// ... handle error
+		panic(err1)
+	}
+
+	err1, err2 := a.repo.DeleteTransferRequest(req_id), a.repo.DeleteTransferToOrbitEvery(req_id)
+
+	if err1 != nil || err2 != nil {
+		c.Error(err1)
+		c.Error(err2)
+		c.String(http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	c.String(http.StatusCreated, "TransferRequest & TransferToOrbit were deleted")
+}
+
 // удаление записи (одной) из м-м по двум айди
-func (a *Application) deleteTransferToOrbit(c *gin.Context) {
+func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 	var requestBody ds.TransferToOrbit
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
+		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
 
-	err1, err2 := a.repo.DeleteTransferToOrbit(requestBody.RequestRefer, requestBody.OrbitRefer)
+	err1, err2 := a.repo.DeleteTransferToOrbitSingle(requestBody.RequestRefer, requestBody.OrbitRefer)
 
 	if err1 != nil || err2 != nil {
 		c.Error(err1)
