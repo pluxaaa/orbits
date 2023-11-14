@@ -31,6 +31,12 @@ type TransferRequest struct {
 	DateFinished  *time.Time `gorm:"type:timestamp"`
 }
 
+/*
+Статусы услуг (IsAvailable)
+1. TRUE = Доступна
+2. FALSE = Недоступна
+3. NULL = Удалена
+*/
 type Orbit struct {
 	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
 	Name        string `gorm:"type:varchar(50)"`

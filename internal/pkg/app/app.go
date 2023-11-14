@@ -137,11 +137,8 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 func (a *Application) changeOrbitStatus(c *gin.Context) {
 	orbitName := c.Param("orbit_name")
-	log.Println("orbitName : ", orbitName)
 
-	// Call the modified ChangeAvailability method
 	err := a.repo.ChangeOrbitStatus(orbitName)
-	log.Println("err : ", err)
 
 	if err != nil {
 		c.Error(err)

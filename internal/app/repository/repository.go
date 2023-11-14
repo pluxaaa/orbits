@@ -49,7 +49,7 @@ func New(dsn string) (*Repository, error) {
 func (r *Repository) GetOrbitByName(name string) (*ds.Orbit, error) {
 	orbit := &ds.Orbit{}
 
-	err := r.db.First(orbit, "name = ?", name).Error
+	err := r.db.Where("is_available IS NOT NULL").First(orbit, "name = ?", name).Error
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbit, error) {
 func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 	orbit := &ds.Orbit{}
 
-	err := r.db.First(orbit, "id = ?", id).Error
+	err := r.db.Where("is_available IS NOT NULL").First(orbit, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 func (r *Repository) GetAllOrbits() ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
 
-	err := r.db.Order("id").Find(&orbits).Error
+	err := r.db.Where("is_available IS NOT NULL").Order("id").Find(&orbits).Error
 
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
 	orbitName = "%" + orbitName + "%"
 
-	err := r.db.Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
+	err := r.db.Where("is_available IS NOT NULL").Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
 	if err != nil {
 		return nil, err
 	}
@@ -177,10 +177,9 @@ func (r *Repository) DeleteOrbit(orbitID uint) error {
 			return r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error
 		}
 	} else {
-		return r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error
+		log.Println(r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error)
 	}
-
-	return r.db.Where("id = ?", orbitID).Delete(&ds.Orbit{}).Error
+	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", nil).Error
 }
 
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
