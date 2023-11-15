@@ -19,11 +19,14 @@ type User struct {
 4. Оказана - одобрена модератором (завершена успешно)
 5. Отклонена - не одобрена модератором (завершена неуспешно)
 */
+
+var ReqStatuses = []string{"Черновик", "Удалена", "Отклонена", "Оказана", "На рассмотрении"}
+
 type TransferRequest struct {
 	ID            uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	ClientRefer   int
+	ClientRefer   uint
 	Client        User `gorm:"foreignKey:ClientRefer"`
-	ModerRefer    int
+	ModerRefer    uint
 	Moder         User       `gorm:"foreignKey:ModerRefer"`
 	Status        string     `gorm:"type:varchar(20); not null"`
 	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
@@ -31,12 +34,6 @@ type TransferRequest struct {
 	DateFinished  *time.Time `gorm:"type:timestamp"`
 }
 
-/*
-Статусы услуг (IsAvailable)
-1. TRUE = Доступна
-2. FALSE = Недоступна
-3. NULL = Удалена
-*/
 type Orbit struct {
 	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
 	Name        string `gorm:"type:varchar(50)"`
@@ -50,16 +47,16 @@ type Orbit struct {
 
 type TransferToOrbit struct {
 	ID           uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	RequestRefer int
+	RequestRefer uint
 	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
-	OrbitRefer   int
+	OrbitRefer   uint
 	Orbit        Orbit `gorm:"foreignKey:OrbitRefer"`
 }
 
 // JSON PARSER
 
 type ChangeTransferStatusRequestBody struct {
-	TransferID int
+	TransferID uint
 	Status     string
 	UserName   string
 }

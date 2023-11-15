@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 )
 
@@ -38,9 +39,9 @@ func (a *Application) StartServer() {
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
 	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
 	a.r.POST("orbits/new_orbit", a.newOrbit)
-	a.r.POST("orbits/change_status/:orbit_name", a.changeOrbitStatus)
 	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
-	a.r.DELETE("orbits/:orbit_name/delete", a.deleteOrbit)
+	a.r.DELETE("orbits/change_status/:orbit_name", a.changeOrbitStatus)
+	//a.r.DELETE("orbits/change_status/:orbit_name", a.deleteOrbit)
 
 	a.r.GET("transfer_requests", a.getAllRequests)
 	a.r.GET("transfer_requests/:req_id", a.getDetailedRequest)
@@ -60,7 +61,6 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
 
 	if orbitName == "" {
-		log.Println("ALL ORBITS 1")
 
 		allOrbits, err := a.repo.GetAllOrbits()
 
@@ -78,7 +78,6 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 			"orbits": a.repo.FilterOrbits(allOrbits),
 		})
 	} else {
-		log.Println("!!! SEARCHING ORBITS !!!")
 
 		foundOrbits, err := a.repo.SearchOrbits(orbitName)
 		if err != nil {
@@ -135,6 +134,7 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 }
 
+// фактическ - удаление услуги (status=false, не выводится)
 func (a *Application) changeOrbitStatus(c *gin.Context) {
 	orbitName := c.Param("orbit_name")
 
@@ -205,6 +205,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 	})
 }
 
+// не используется
 func (a *Application) deleteOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -245,13 +246,13 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	log.Println("c_id: ", jsonMap)
 
 	request := &ds.TransferRequest{}
-	request, err = a.repo.CreateTransferRequest(jsonMap["client_id"])
+	request, err = a.repo.CreateTransferRequest(uint(jsonMap["client_id"]))
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	err = a.repo.AddTransferToOrbits(int(orbit.ID), int(request.ID))
+	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
 	if err != nil {
 		c.Error(err)
 		return
@@ -276,7 +277,7 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 		panic(err)
 	}
 
-	requests, err := a.repo.GetRequestByID(req_id)
+	requests, err := a.repo.GetRequestByID(uint(req_id))
 	if err != nil {
 		c.Error(err)
 		return
@@ -297,6 +298,8 @@ func (a *Application) getRequestsByStatus(c *gin.Context) {
 	c.JSON(http.StatusFound, requests)
 }
 
+// TransferID не нужен в текущей ситуации (/transfer_requests/:req_id/<>statusChange), т.к. можно получать его из урл
+// Оба метода почти идентичны -> сделать один большой = лучше?
 func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -305,26 +308,47 @@ func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 		return
 	}
 
-	user_isModer, err := a.repo.GetUserRole(requestBody.UserName)
-
+	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	if *user_isModer != true {
-		c.String(http.StatusBadRequest, "У пользователя должна быть роль модератора")
-		return
-	}
-
-	err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
-
+	currUser, err := a.repo.GetUserByName(requestBody.UserName)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
+		c.String(http.StatusBadRequest, "Неверный статус")
+		return
+	}
+
+	if *currUser.IsModer != true {
+		c.String(http.StatusForbidden, "У пользователя должна быть роль модератора")
+		return
+	} else {
+		if currRequest.ModerRefer == currUser.ID {
+			if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-3:], requestBody.Status) {
+				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+
+				if err != nil {
+					c.Error(err)
+					return
+				}
+
+				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+				return
+			} else {
+				c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
+				return
+			}
+		} else {
+			c.String(http.StatusForbidden, "Модератор не является ответственным")
+			return
+		}
+	}
 }
 
 // надо ли делать проверку является ли пользователь клиентом?
@@ -336,14 +360,47 @@ func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 		return
 	}
 
-	err := a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
-
+	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+	currUser, err := a.repo.GetUserByName(requestBody.UserName)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
+		c.String(http.StatusBadRequest, "Неверный статус")
+		return
+	}
+
+	if *currUser.IsModer == true {
+		c.String(http.StatusForbidden, "У пользователя должна быть роль клиента")
+		return
+	} else {
+		if currRequest.ClientRefer == currUser.ID {
+			if slices.Contains(ds.ReqStatuses[:2], requestBody.Status) {
+				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+
+				if err != nil {
+					c.Error(err)
+					return
+				}
+
+				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+				return
+			} else {
+				c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
+				return
+			}
+		} else {
+			c.String(http.StatusForbidden, "Клиент не является ответственным")
+			return
+		}
+	}
 }
 
 func (a *Application) deleteTransferRequest(c *gin.Context) {
@@ -353,7 +410,7 @@ func (a *Application) deleteTransferRequest(c *gin.Context) {
 		panic(err1)
 	}
 
-	err1, err2 := a.repo.DeleteTransferRequest(req_id), a.repo.DeleteTransferToOrbitEvery(req_id)
+	err1, err2 := a.repo.DeleteTransferRequest(uint(req_id)), a.repo.DeleteTransferToOrbitEvery(uint(req_id))
 
 	if err1 != nil || err2 != nil {
 		c.Error(err1)

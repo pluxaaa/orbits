@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -49,7 +50,7 @@ func New(dsn string) (*Repository, error) {
 func (r *Repository) GetOrbitByName(name string) (*ds.Orbit, error) {
 	orbit := &ds.Orbit{}
 
-	err := r.db.Where("is_available IS NOT NULL").First(orbit, "name = ?", name).Error
+	err := r.db.Where("is_available = ?", true).First(orbit, "name = ?", name).Error
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func (r *Repository) GetOrbitByName(name string) (*ds.Orbit, error) {
 func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 	orbit := &ds.Orbit{}
 
-	err := r.db.Where("is_available IS NOT NULL").First(orbit, "id = ?", id).Error
+	err := r.db.Where("is_available = ?", true).First(orbit, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,7 @@ func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 func (r *Repository) GetAllOrbits() ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
 
-	err := r.db.Where("is_available IS NOT NULL").Order("id").Find(&orbits).Error
+	err := r.db.Where("is_available = ?", true).Order("id").Find(&orbits).Error
 
 	if err != nil {
 		return nil, err
@@ -84,7 +85,7 @@ func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
 	orbitName = "%" + orbitName + "%"
 
-	err := r.db.Where("is_available IS NOT NULL").Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
+	err := r.db.Where("is_available = ?", true).Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
 	if err != nil {
 		return nil, err
 	}
@@ -93,14 +94,20 @@ func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbit, error) {
 }
 
 func (r *Repository) ChangeOrbitStatus(orbitName string) error {
-	query := "UPDATE orbits SET is_available = NOT is_available WHERE Name = $1"
-
 	sqlDB, err := r.db.DB()
 	if err != nil {
 		return err
 	}
 
-	_, err = sqlDB.Exec(query, orbitName)
+	tryID := "SELECT id FROM orbits WHERE name = $1"
+	_, err = sqlDB.Exec(tryID, orbitName)
+	if err == nil {
+		query := "DELETE FROM transfer_to_orbits WHERE orbit_refer = $1"
+		_, err = sqlDB.Exec(query, tryID)
+		query = "UPDATE orbits SET is_available = false WHERE name = $1"
+		_, err = sqlDB.Exec(query, orbitName)
+		return nil
+	}
 
 	return err
 }
@@ -133,7 +140,8 @@ func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
 
 	orbit.ImageURL = imageURL
 	orbit.ID = uint(len(allOrbits)) + 1
-	log.Println("NEW ID: ", orbit.ID)
+	orbit.IsAvailable = true
+
 	return r.db.Create(orbit).Error
 }
 
@@ -166,7 +174,7 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
-// VERY BAD; CHANGE LATER
+// исправить; сейчас не используется
 func (r *Repository) DeleteOrbit(orbitID uint) error {
 	if r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error != nil {
 		return r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error
@@ -179,7 +187,14 @@ func (r *Repository) DeleteOrbit(orbitID uint) error {
 	} else {
 		log.Println(r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error)
 	}
-	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", nil).Error
+
+	//delOrbit, err := r.GetOrbitByID(orbitID)
+	//err = r.deleteImageFromMinio(delOrbit.ImageURL)
+	//if err != nil {
+	//	return err
+	//}
+
+	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", false).Error
 }
 
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
@@ -241,7 +256,7 @@ func (r *Repository) GetAllRequests() ([]ds.TransferRequest, error) {
 	return requests, nil
 }
 
-func (r *Repository) GetRequestByID(id int) (*ds.TransferRequest, error) {
+func (r *Repository) GetRequestByID(id uint) (*ds.TransferRequest, error) {
 	request := &ds.TransferRequest{}
 
 	err := r.db.First(request, "id = ?", id).Error
@@ -268,7 +283,7 @@ func (r *Repository) GetRequestsByStatus(status string) ([]ds.TransferRequest, e
 }
 
 // попытка получить заявку для конкретного клиента со статусом Черновик
-func (r *Repository) GetCurrentRequest(client_refer int) (*ds.TransferRequest, error) {
+func (r *Repository) GetCurrentRequest(client_refer uint) (*ds.TransferRequest, error) {
 	request := &ds.TransferRequest{}
 	err := r.db.Where("status = ?", "Черновик").First(request, "client_refer = ?", client_refer).Error
 	//если реквеста нет => err = record not found
@@ -280,7 +295,7 @@ func (r *Repository) GetCurrentRequest(client_refer int) (*ds.TransferRequest, e
 	return request, nil
 }
 
-func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferRequest, error) {
+func (r *Repository) CreateTransferRequest(client_refer uint) (*ds.TransferRequest, error) {
 	//проверка есть ли открытая заявка у клиента
 	request, err := r.GetCurrentRequest(client_refer)
 	if err != nil {
@@ -304,7 +319,7 @@ func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferReques
 			ID:            uint(len([]ds.TransferRequest{})),
 			ClientRefer:   client_refer,
 			Client:        client,
-			ModerRefer:    int(moder_refer),
+			ModerRefer:    moder_refer,
 			Moder:         moder,
 			Status:        "Черновик",
 			DateCreated:   time.Now(),
@@ -316,11 +331,30 @@ func (r *Repository) CreateTransferRequest(client_refer int) (*ds.TransferReques
 	return request, nil
 }
 
-func (r *Repository) ChangeRequestStatus(id int, status string) error {
-	return r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("status", status).Error
+func (r *Repository) ChangeRequestStatus(id uint, status string) error {
+	if slices.Contains(ds.ReqStatuses[1:4], status) {
+		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_finished", time.Now()).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	if status == ds.ReqStatuses[4] {
+		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_processed", time.Now()).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("status", status).Error
+	if err != nil {
+		return fmt.Errorf("ошибка обновления статуса: %w", err)
+	}
+
+	return nil
 }
 
-func (r *Repository) DeleteTransferRequest(req_id int) error {
+func (r *Repository) DeleteTransferRequest(req_id uint) error {
 	if r.db.Where("id = ?", req_id).First(&ds.TransferRequest{}).Error != nil {
 
 		return r.db.Where("id = ?", req_id).First(&ds.TransferRequest{}).Error
@@ -333,9 +367,9 @@ func (r *Repository) DeleteTransferRequest(req_id int) error {
 // ------------------------- TRANSFERS_TO_ORBITS METHODS ---------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
-	orbit := ds.Orbit{ID: uint(orbit_refer)}
-	request := ds.TransferRequest{ID: uint(request_refer)}
+func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error {
+	orbit := ds.Orbit{ID: orbit_refer}
+	request := ds.TransferRequest{ID: request_refer}
 
 	NewMtM := &ds.TransferToOrbit{
 		ID:           uint(len([]ds.TransferToOrbit{})),
@@ -348,7 +382,7 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer int) error {
 }
 
 // удаляет одну запись за раз
-func (r *Repository) DeleteTransferToOrbitSingle(transfer_id int, orbit_id int) (error, error) {
+func (r *Repository) DeleteTransferToOrbitSingle(transfer_id uint, orbit_id uint) (error, error) {
 	if r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil ||
 		r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil {
 
@@ -359,7 +393,7 @@ func (r *Repository) DeleteTransferToOrbitSingle(transfer_id int, orbit_id int) 
 }
 
 // удаляет все записи по id реквеста
-func (r *Repository) DeleteTransferToOrbitEvery(transfer_id int) error {
+func (r *Repository) DeleteTransferToOrbitEvery(transfer_id uint) error {
 	if r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil {
 		return r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error
 	}
@@ -371,7 +405,7 @@ func (r *Repository) DeleteTransferToOrbitEvery(transfer_id int) error {
 // --------------------------------- USERS METHODS ---------------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) GetUserRole(name string) (*bool, error) {
+func (r *Repository) GetUserByName(name string) (*ds.User, error) {
 	user := &ds.User{}
 
 	err := r.db.First(user, "name = ?", name).Error
@@ -379,5 +413,5 @@ func (r *Repository) GetUserRole(name string) (*bool, error) {
 		return nil, err
 	}
 
-	return user.IsModer, nil
+	return user, nil
 }
