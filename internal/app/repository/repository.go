@@ -69,30 +69,28 @@ func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 	return orbit, nil
 }
 
-func (r *Repository) GetAllOrbits() ([]ds.Orbit, error) {
+func (r *Repository) GetAllOrbits(orbitName string) ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
+	if orbitName == "" {
+		err := r.db.Where("is_available = ?", true).
+			Order("id").Find(&orbits).Error
 
-	err := r.db.Where("is_available = ?", true).Order("id").Find(&orbits).Error
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := r.db.Where("is_available = ?", true).Where("name ILIKE ?", "%"+orbitName+"%").
+			Order("id").Find(&orbits).Error
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return orbits, nil
 }
 
-func (r *Repository) SearchOrbits(orbitName string) ([]ds.Orbit, error) {
-	orbits := []ds.Orbit{}
-	orbitName = "%" + orbitName + "%"
-
-	err := r.db.Where("is_available = ?", true).Where("name ILIKE ?", orbitName).Order("id").Find(&orbits).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return orbits, nil
-}
-
+// логическое "удаление" орбиты (SQL)
 func (r *Repository) ChangeOrbitStatus(orbitName string) error {
 	sqlDB, err := r.db.DB()
 	if err != nil {
@@ -112,19 +110,9 @@ func (r *Repository) ChangeOrbitStatus(orbitName string) error {
 	return err
 }
 
-func (r *Repository) FilterOrbits(orbits []ds.Orbit) []ds.Orbit {
-	var new_orbits = []ds.Orbit{}
-
-	for i := range orbits {
-		new_orbits = append(new_orbits, orbits[i])
-	}
-
-	return new_orbits
-
-}
-
 func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
 	imageURL := "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg"
+
 	log.Println(imagePath)
 	if imagePath != "" {
 		var err error
@@ -133,13 +121,15 @@ func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
 			return err
 		}
 	}
-	allOrbits, err := r.GetAllOrbits()
+
+	var cntOrbits int64
+	err := r.db.Model(&ds.Orbit{}).Count(&cntOrbits).Error
 	if err != nil {
-		log.Println(err)
+		return err
 	}
 
 	orbit.ImageURL = imageURL
-	orbit.ID = uint(len(allOrbits)) + 1
+	orbit.ID = uint(cntOrbits) + 1
 	orbit.IsAvailable = true
 
 	return r.db.Create(orbit).Error
@@ -174,28 +164,28 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
-// исправить; сейчас не используется
-func (r *Repository) DeleteOrbit(orbitID uint) error {
-	if r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error != nil {
-		return r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error
-	}
-
-	if r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error == nil {
-		if r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error != nil {
-			return r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error
-		}
-	} else {
-		log.Println(r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error)
-	}
-
-	//delOrbit, err := r.GetOrbitByID(orbitID)
-	//err = r.deleteImageFromMinio(delOrbit.ImageURL)
-	//if err != nil {
-	//	return err
-	//}
-
-	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", false).Error
-}
+// исправить; !сейчас не используется! -> физ удаление
+//func (r *Repository) DeleteOrbit(orbitID uint) error {
+//	if r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error != nil {
+//		return r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error
+//	}
+//
+//	if r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error == nil {
+//		if r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error != nil {
+//			return r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error
+//		}
+//	} else {
+//		log.Println(r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error)
+//	}
+//
+//	/!/delOrbit, err := r.GetOrbitByID(orbitID)
+//	/!/err = r.deleteImageFromMinio(delOrbit.ImageURL)
+//	/!/if err != nil {
+//	/!/	return err
+//	/!/}
+//
+//	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", false).Error
+//}
 
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
 	minioClient := mClient.NewMinioClient()

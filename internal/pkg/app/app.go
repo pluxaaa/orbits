@@ -60,52 +60,22 @@ func (a *Application) StartServer() {
 func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
 
-	if orbitName == "" {
+	allOrbits, err := a.repo.GetAllOrbits(orbitName)
 
-		allOrbits, err := a.repo.GetAllOrbits()
-
-		if err != nil {
-			c.Error(err)
-		}
-
-		//для лаб3 нужен хтмл
-		//c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
-		//	"orbits": a.repo.FilterOrbits(allOrbits),
-		//})
-
-		//для лаб4 нужен жсон
-		c.JSON(http.StatusOK, gin.H{
-			"orbits": a.repo.FilterOrbits(allOrbits),
-		})
-	} else {
-
-		foundOrbits, err := a.repo.SearchOrbits(orbitName)
-		if err != nil {
-			c.Error(err)
-			return
-		}
-		log.Println("found: ", len(foundOrbits))
-
-		//для лаб3 нужен хтмл
-		//c.HTML(http.StatusOK, "orbitsGeneral.html", gin.H{
-		//	"orbits":    a.repo.FilterOrbits(foundOrbits),
-		//	"orbitName": orbitName,
-		//})
-
-		//для лаб4 нужен жсон
-		c.JSON(http.StatusOK, gin.H{
-			"orbits":    a.repo.FilterOrbits(foundOrbits),
-			"orbitName": orbitName,
-		})
+	if err != nil {
+		c.Error(err)
 	}
+
+	c.JSON(http.StatusFound, allOrbits)
+
 }
 
 func (a *Application) getDetailedOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
-	if orbit_name == "favicon.ico" {
-		return
-	}
+	//if orbit_name == "favicon.ico" {
+	//	return
+	//}
 
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
@@ -145,7 +115,7 @@ func (a *Application) changeOrbitStatus(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusFound, "/orbits")
+	//c.Redirect(http.StatusFound, "/orbits")
 }
 
 func (a *Application) newOrbit(c *gin.Context) {
@@ -156,10 +126,7 @@ func (a *Application) newOrbit(c *gin.Context) {
 		c.Error(err)
 	}
 
-	log.Println("REQ BODY:    ", requestBody.ImageURL)
 	err := a.repo.AddOrbit(&requestBody, requestBody.ImageURL)
-	log.Println(requestBody.Name, " is added")
-
 	if err != nil {
 		c.Error(err)
 		return
@@ -205,22 +172,22 @@ func (a *Application) editOrbit(c *gin.Context) {
 	})
 }
 
-// не используется
-func (a *Application) deleteOrbit(c *gin.Context) {
-	orbit_name := c.Param("orbit_name")
-
-	orbit, err := a.repo.GetOrbitByName(orbit_name)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	err = a.repo.DeleteOrbit(orbit.ID)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-}
+// не используется -> физ удаление орбиты
+//func (a *Application) deleteOrbit(c *gin.Context) {
+//	orbit_name := c.Param("orbit_name")
+//
+//	orbit, err := a.repo.GetOrbitByName(orbit_name)
+//	if err != nil {
+//		c.Error(err)
+//		return
+//	}
+//
+//	err = a.repo.DeleteOrbit(orbit.ID)
+//	if err != nil {
+//		c.Error(err)
+//		return
+//	}
+//}
 
 // в json надо послать айди клиента
 func (a *Application) addOrbitToRequest(c *gin.Context) {
