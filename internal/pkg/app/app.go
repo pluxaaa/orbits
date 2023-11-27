@@ -4,16 +4,57 @@ import (
 	"L1/internal/app/ds"
 	"L1/internal/app/dsn"
 	"L1/internal/app/repository"
+	"L1/internal/app/role"
+	"crypto/sha1"
+	"encoding/hex"
+
+	"fmt"
+
 	"github.com/gin-gonic/gin"
+
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
+
+	"encoding/json"
 	"log"
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 )
 
 type Application struct {
-	repo repository.Repository
-	r    *gin.Engine
+	repo   repository.Repository
+	r      *gin.Engine
+	config struct {
+		JWT struct {
+			Token         string
+			SigningMethod jwt.SigningMethod
+			ExpiresIn     time.Duration
+		}
+	}
+}
+
+type loginReq struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
+}
+
+type loginResp struct {
+	Username    string
+	Role        role.Role
+	ExpiresIn   time.Duration `json:"expires_in"`
+	AccessToken string        `json:"access_token"`
+	TokenType   string        `json:"token_type"`
+}
+
+type registerReq struct {
+	Name string `json:"name"` // лучше назвать то же самое что login
+	Pass string `json:"pass"`
+}
+
+type registerResp struct {
+	Ok bool `json:"ok"`
 }
 
 func New() Application {
@@ -35,13 +76,15 @@ func (a *Application) StartServer() {
 	a.r.LoadHTMLGlob("templates/*.html")
 	a.r.Static("/css", "./templates")
 
+	a.r.POST("/login", a.login)
+	a.r.POST("/sign_up", a.register)
+
 	a.r.GET("orbits", a.getAllOrbits)
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
 	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
 	a.r.POST("orbits/new_orbit", a.newOrbit)
 	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
 	a.r.DELETE("orbits/change_status/:orbit_name", a.changeOrbitStatus)
-	//a.r.DELETE("orbits/change_status/:orbit_name", a.deleteOrbit)
 
 	a.r.GET("transfer_requests", a.getAllRequests)
 	a.r.GET("transfer_requests/:req_id", a.getDetailedRequest)
@@ -52,9 +95,132 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 
+	a.r.Use(a.WithAuthCheck(role.Moderator)).GET("/ping", a.ping)
+
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
+}
+
+type pingReq struct{}
+type pingResp struct {
+	Status string `json:"status"`
+}
+
+// Ping godoc
+// @Summary      Show hello text
+// @Description  friendly response
+// @Tags         Tests
+// @Produce      json
+// @Success      200  {object}  pingResp
+// @Router       /ping/{name} [get]
+func (a *Application) ping(gCtx *gin.Context) {
+	log.Println("ping func")
+	gCtx.JSON(http.StatusOK, gin.H{
+		"auth": true,
+	})
+}
+
+func (a *Application) register(gCtx *gin.Context) {
+	req := &registerReq{}
+
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	if req.Pass == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		return
+	}
+
+	if req.Name == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		return
+	}
+
+	err = a.repo.Register(&ds.UserUID{
+		UUID: uuid.New(),
+		Role: role.User,
+		Name: req.Name,
+		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	gCtx.JSON(http.StatusOK, &registerResp{
+		Ok: true,
+	})
+}
+
+func generateHashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (a *Application) login(gCtx *gin.Context) {
+	log.Println("login")
+	cfg := a.config
+	req := &loginReq{}
+
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+
+		return
+	}
+
+	user, err := a.repo.GetUserByLogin(req.Login)
+	log.Println("найден челик", req.Login, "-->", user.Name)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+		// значит проверка пройдена
+		log.Println("проверка пройдена")
+		// генерируем ему jwt
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &ds.JWTClaims{
+			StandardClaims: jwt.StandardClaims{
+				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(),
+				IssuedAt:  time.Now().Unix(),
+				Issuer:    "web-admin",
+			},
+			UserUUID: uuid.New(), // test uuid
+			Role:     user.Role,
+		})
+
+		if token == nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+
+			return
+		}
+
+		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
+		if err != nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+
+			return
+		}
+
+		gCtx.JSON(http.StatusOK, loginResp{
+			Username:    user.Name,
+			Role:        user.Role,
+			AccessToken: strToken,
+			TokenType:   "Bearer",
+			ExpiresIn:   cfg.JWT.ExpiresIn,
+		})
+
+		gCtx.AbortWithStatus(http.StatusOK)
+	} else {
+		gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+	}
 }
 
 func (a *Application) getAllOrbits(c *gin.Context) {
@@ -73,24 +239,11 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 func (a *Application) getDetailedOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
-	//if orbit_name == "favicon.ico" {
-	//	return
-	//}
-
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	//c.HTML(http.StatusOK, "orbitDetail.html", gin.H{
-	//	"Name":        orbit.Name,
-	//	"IsAvailable": orbit.IsAvailable,
-	//	"Apogee":      orbit.Apogee,
-	//	"Perigee":     orbit.Perigee,
-	//	"Inclination": orbit.Inclination,
-	//	"Description": orbit.Description,
-	//	"ImageURL":    orbit.ImageURL,
-	//})
 
 	c.JSON(http.StatusOK, gin.H{
 		"Name":        orbit.Name,
@@ -171,23 +324,6 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"ImageURL":    editingOrbit.ImageURL,
 	})
 }
-
-// не используется -> физ удаление орбиты
-//func (a *Application) deleteOrbit(c *gin.Context) {
-//	orbit_name := c.Param("orbit_name")
-//
-//	orbit, err := a.repo.GetOrbitByName(orbit_name)
-//	if err != nil {
-//		c.Error(err)
-//		return
-//	}
-//
-//	err = a.repo.DeleteOrbit(orbit.ID)
-//	if err != nil {
-//		c.Error(err)
-//		return
-//	}
-//}
 
 // в json надо послать айди клиента
 func (a *Application) addOrbitToRequest(c *gin.Context) {

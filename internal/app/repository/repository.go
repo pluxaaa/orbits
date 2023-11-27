@@ -5,6 +5,7 @@ import (
 	mClient "L1/internal/app/minio"
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -163,29 +164,6 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
-
-// исправить; !сейчас не используется! -> физ удаление
-//func (r *Repository) DeleteOrbit(orbitID uint) error {
-//	if r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error != nil {
-//		return r.db.Where("id = ?", orbitID).First(&ds.Orbit{}).Error
-//	}
-//
-//	if r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error == nil {
-//		if r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error != nil {
-//			return r.db.Where("orbit_refer = ?", orbitID).Delete(&ds.TransferToOrbit{}).Error
-//		}
-//	} else {
-//		log.Println(r.db.Where("orbit_refer = ?", orbitID).First(&ds.TransferToOrbit{}).Error)
-//	}
-//
-//	/!/delOrbit, err := r.GetOrbitByID(orbitID)
-//	/!/err = r.deleteImageFromMinio(delOrbit.ImageURL)
-//	/!/if err != nil {
-//	/!/	return err
-//	/!/}
-//
-//	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Update("is_available", false).Error
-//}
 
 func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
 	minioClient := mClient.NewMinioClient()
@@ -404,4 +382,30 @@ func (r *Repository) GetUserByName(name string) (*ds.User, error) {
 	}
 
 	return user, nil
+}
+
+func (r *Repository) GetUserByLogin(login string) (*ds.UserUID, error) {
+	user := &ds.UserUID{
+		Name: "login",
+	}
+
+	err := r.db.First(user).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// =================================================================================
+// ---------------------------------------------------------------------------------
+// --------------------------------- AUTH METHODS ---------------------------------
+// ---------------------------------------------------------------------------------
+
+func (r *Repository) Register(user *ds.UserUID) error {
+	if user.UUID == uuid.Nil {
+		user.UUID = uuid.New()
+	}
+
+	return r.db.Create(user).Error
 }

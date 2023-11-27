@@ -5,6 +5,14 @@ import (
 	"log"
 )
 
+// @title orbits
+// @version 0.0-0
+// @description orbit transfer
+
+// @host 127.0.0.1:8000
+// @schemes http
+// @BasePath /
+
 func main() {
 	log.Println("Application start!")
 

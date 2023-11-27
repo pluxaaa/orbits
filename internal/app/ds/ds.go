@@ -1,6 +1,8 @@
 package ds
 
 import (
+	"L1/internal/app/role"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -9,6 +11,13 @@ type User struct {
 	IsModer  *bool
 	Name     string `gorm:"type:varchar(50);unique;not null"`
 	Password string `gorm:"type:varchar(50);not null"`
+}
+
+type UserUID struct {
+	UUID uuid.UUID `gorm:"type:uuid"`
+	Name string    `json:"name"`
+	Role role.Role `sql:"type:string;"`
+	Pass string
 }
 
 /*
