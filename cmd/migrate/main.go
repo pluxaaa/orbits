@@ -40,9 +40,4 @@ func main() {
 		panic("cant migrate db")
 	}
 
-	err = db.AutoMigrate(&ds.UserUID{})
-	if err != nil {
-		panic("cant migrate db")
-	}
-
 }

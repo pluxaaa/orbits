@@ -57,7 +57,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Co
 			}
 		}
 		gCtx.AbortWithStatus(http.StatusForbidden)
-		log.Printf("role %s is not assigned in %s", myClaims.Role, assignedRoles)
+		log.Println("Роль ", myClaims.Role, "не указана в ", assignedRoles)
 
 		return
 

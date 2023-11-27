@@ -251,7 +251,7 @@ func (r *Repository) GetRequestsByStatus(status string) ([]ds.TransferRequest, e
 }
 
 // попытка получить заявку для конкретного клиента со статусом Черновик
-func (r *Repository) GetCurrentRequest(client_refer uint) (*ds.TransferRequest, error) {
+func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequest, error) {
 	request := &ds.TransferRequest{}
 	err := r.db.Where("status = ?", "Черновик").First(request, "client_refer = ?", client_refer).Error
 	//если реквеста нет => err = record not found
@@ -263,29 +263,34 @@ func (r *Repository) GetCurrentRequest(client_refer uint) (*ds.TransferRequest, 
 	return request, nil
 }
 
-func (r *Repository) CreateTransferRequest(client_refer uint) (*ds.TransferRequest, error) {
+func (r *Repository) CreateTransferRequest(client_name string) (*ds.TransferRequest, error) {
 	//проверка есть ли открытая заявка у клиента
-	request, err := r.GetCurrentRequest(client_refer)
+	user, err := r.GetUserByName(client_name)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := r.GetCurrentRequest(user.UUID)
 	if err != nil {
 		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
 
 		//назначение модератора
-		users := []ds.User{}
-		err = r.db.Where("is_moder = ?", true).Find(&users).Error
+		moders := []ds.User{}
+		err = r.db.Where("role = ?", 2).Find(&moders).Error
 		if err != nil {
 			return nil, err
 		}
-		n := rand.Int() % len(users)
-		moder_refer := users[n].ID
+		n := rand.Int() % len(moders)
+		moder_refer := moders[n].UUID
 		log.Println("moder: ", moder_refer)
 
 		//поля типа Users, связанные с передавыемыми значениями из функции
-		client := ds.User{ID: uint(client_refer)}
-		moder := ds.User{ID: moder_refer}
+		client := ds.User{UUID: user.UUID}
+		moder := ds.User{UUID: moder_refer}
 
 		NewTransferRequest := &ds.TransferRequest{
 			ID:            uint(len([]ds.TransferRequest{})),
-			ClientRefer:   client_refer,
+			ClientRefer:   user.UUID,
 			Client:        client,
 			ModerRefer:    moder_refer,
 			Moder:         moder,
@@ -384,25 +389,12 @@ func (r *Repository) GetUserByName(name string) (*ds.User, error) {
 	return user, nil
 }
 
-func (r *Repository) GetUserByLogin(login string) (*ds.UserUID, error) {
-	user := &ds.UserUID{
-		Name: "login",
-	}
-
-	err := r.db.First(user).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
-
 // =================================================================================
 // ---------------------------------------------------------------------------------
 // --------------------------------- AUTH METHODS ---------------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) Register(user *ds.UserUID) error {
+func (r *Repository) Register(user *ds.User) error {
 	if user.UUID == uuid.Nil {
 		user.UUID = uuid.New()
 	}

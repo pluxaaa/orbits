@@ -1,6 +1,7 @@
 package app
 
 import (
+	"L1/docs"
 	"L1/internal/app/config"
 	"L1/internal/app/ds"
 	"L1/internal/app/dsn"
@@ -13,6 +14,9 @@ import (
 	"strings"
 
 	"fmt"
+
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/gin-gonic/gin"
 
@@ -100,6 +104,9 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 
+	docs.SwaggerInfo.BasePath = "/"
+	a.r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+
 	a.r.POST("/login", a.login)
 	a.r.POST("/sign_up", a.register)
 	a.r.POST("/logout", a.logout)
@@ -110,6 +117,14 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
+// @Summary Получение всех орбит со статусом "Доступна"
+// @Description Возвращает всех доступные орбиты
+// @Tags orbits
+// @Accept json
+// @Produce json
+// @Success 302 {} json
+// @Param orbit_name query string false "Название орбиты"
+// @Router /orbits [get]
 func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
 
@@ -123,6 +138,13 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 
 }
 
+// @Summary      Получение детализированной информации об орбите
+// @Description  Возвращает подробную информацию об орбите по ее названию
+// @Tags         orbits
+// @Produce      json
+// @Param orbit_name string true "Название орбиты"
+// @Success      200  {object}  string
+// @Router       /orbits/{orbit} [get]
 func (a *Application) getDetailedOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -158,6 +180,14 @@ func (a *Application) changeOrbitStatus(c *gin.Context) {
 	//c.Redirect(http.StatusFound, "/orbits")
 }
 
+// @Summary      Добавление новой орбиты
+// @Description  Добавляет орбиту с полями, указанныим в JSON
+// @Tags orbits
+// @Accept json
+// @Produce      json
+// @Body json
+// @Success      201  {object}  string
+// @Router       /orbits/new_orbit [post]
 func (a *Application) newOrbit(c *gin.Context) {
 	var requestBody ds.Orbit
 
@@ -172,7 +202,7 @@ func (a *Application) newOrbit(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusCreated, gin.H{
 		"ID":          requestBody.ID,
 		"Name":        requestBody.Name,
 		"Apogee":      requestBody.Apogee,
@@ -183,6 +213,13 @@ func (a *Application) newOrbit(c *gin.Context) {
 	})
 }
 
+// @Summary      Изменение орбиты
+// @Description  Обновляет данные об орбите, основываясь на полях из JSON
+// @Tags         orbits
+// @Accept json
+// @Produce      json
+// @Success      200  {object}  string
+// @Router       /orbits/{orbit}/edit [put]
 func (a *Application) editOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
@@ -212,7 +249,13 @@ func (a *Application) editOrbit(c *gin.Context) {
 	})
 }
 
-// в json надо послать айди клиента
+// @Summary      Добавление орбиты в заявку на трансфер
+// @Description  Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
+// @Tags general
+// @Accept json
+// @Produce      json
+// @Success      302  {object}  string
+// @Router       /orbits/add [post]
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -227,16 +270,16 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	// jsonMap: string-int
 	// можно использовать string-interface{} (определяемый тип, в данном случае - пустой)
 	// тогда будет jsonMap["client_id"].int
-	var jsonMap map[string]int
+	var jsonMap map[string]string
 
 	if err = c.BindJSON(&jsonMap); err != nil {
 		c.Error(err)
 		return
 	}
-	log.Println("c_id: ", jsonMap)
+	log.Println("c_name: ", jsonMap)
 
 	request := &ds.TransferRequest{}
-	request, err = a.repo.CreateTransferRequest(uint(jsonMap["client_id"]))
+	request, err = a.repo.CreateTransferRequest(jsonMap["client_name"])
 	if err != nil {
 		c.Error(err)
 		return
@@ -249,6 +292,12 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	}
 }
 
+// @Summary      Получение всех заявок на трансфер
+// @Description  Получает все заявки на трансфер
+// @Tags         transfer requests
+// @Produce      json
+// @Success      302  {object}  string
+// @Router       /transfer_requests [get]
 func (a *Application) getAllRequests(c *gin.Context) {
 	requests, err := a.repo.GetAllRequests()
 
@@ -260,6 +309,12 @@ func (a *Application) getAllRequests(c *gin.Context) {
 	c.JSON(http.StatusFound, requests)
 }
 
+// @Summary      Получение детализированной заявки на трансфер
+// @Description  Получает подробную информаицю о заявке на трансфер
+// @Tags         transfer requests
+// @Produce      json
+// @Success      302  {object}  string
+// @Router       /transfer_requests/{transfer_request} [get]
 func (a *Application) getDetailedRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
@@ -276,6 +331,7 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 	c.JSON(http.StatusFound, requests)
 }
 
+// надо??
 func (a *Application) getRequestsByStatus(c *gin.Context) {
 	req_status := c.Param("req_status")
 
@@ -290,6 +346,13 @@ func (a *Application) getRequestsByStatus(c *gin.Context) {
 
 // TransferID не нужен в текущей ситуации (/transfer_requests/:req_id/<>statusChange), т.к. можно получать его из урл
 // Оба метода почти идентичны -> сделать один большой = лучше?
+// @Summary      Изменение статуса заявки на трансфер (для модератора)
+// @Description  Изменяет статус заявки на трансфер на любой из доступных для модератора
+// @Tags         transfer requests
+// @Accept json
+// @Produce      json
+// @Success      201  {object}  string
+// @Router       transfer_requests/{transfer_request}/moder_change_status [put]
 func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -315,33 +378,35 @@ func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 		return
 	}
 
-	if *currUser.IsModer != true {
-		c.String(http.StatusForbidden, "У пользователя должна быть роль модератора")
-		return
-	} else {
-		if currRequest.ModerRefer == currUser.ID {
-			if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-3:], requestBody.Status) {
-				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+	if currRequest.ModerRefer == currUser.UUID {
+		if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-3:], requestBody.Status) {
+			err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
 
-				if err != nil {
-					c.Error(err)
-					return
-				}
-
-				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-				return
-			} else {
-				c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
+			if err != nil {
+				c.Error(err)
 				return
 			}
+
+			c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+			return
 		} else {
-			c.String(http.StatusForbidden, "Модератор не является ответственным")
+			c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
 			return
 		}
+	} else {
+		c.String(http.StatusForbidden, "Модератор не является ответственным")
+		return
 	}
 }
 
 // надо ли делать проверку является ли пользователь клиентом?
+// @Summary      Изменение статуса заявки на трансфер (для клиента)
+// @Description  Изменяет статус заявки на трансфер на любой из доступных для клиента
+// @Tags         transfer requests
+// @Accept json
+// @Produce      json
+// @Success      201  {object}  string
+// @Router       transfer_requests/{transfer_request}/client_change_status [put]
 func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -367,32 +432,34 @@ func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 		return
 	}
 
-	if *currUser.IsModer == true {
-		c.String(http.StatusForbidden, "У пользователя должна быть роль клиента")
-		return
-	} else {
-		if currRequest.ClientRefer == currUser.ID {
-			if slices.Contains(ds.ReqStatuses[:2], requestBody.Status) {
-				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+	if currRequest.ClientRefer == currUser.UUID {
+		if slices.Contains(ds.ReqStatuses[:2], requestBody.Status) {
+			err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
 
-				if err != nil {
-					c.Error(err)
-					return
-				}
-
-				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-				return
-			} else {
-				c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
+			if err != nil {
+				c.Error(err)
 				return
 			}
+
+			c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+			return
 		} else {
-			c.String(http.StatusForbidden, "Клиент не является ответственным")
+			c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
 			return
 		}
+	} else {
+		c.String(http.StatusForbidden, "Клиент не является ответственным")
+		return
 	}
 }
 
+// @Summary      Логическое удаление заявки на трансфер
+// @Description  Изменяет статус заявки на трансфер на "Удалена"
+// @Tags         transfer requests
+// @Accept json
+// @Produce      json
+// @Success      302  {object}  string
+// @Router       transfer_requests/{transfer_requests}/delete [post]
 func (a *Application) deleteTransferRequest(c *gin.Context) {
 	req_id, err1 := strconv.Atoi(c.Param("req_id"))
 	if err1 != nil {
@@ -409,7 +476,7 @@ func (a *Application) deleteTransferRequest(c *gin.Context) {
 		return
 	}
 
-	c.String(http.StatusCreated, "TransferRequest & TransferToOrbit were deleted")
+	c.String(http.StatusFound, "TransferRequest & TransferToOrbit were deleted")
 }
 
 // удаление записи (одной) из м-м по двум айди
@@ -439,13 +506,6 @@ type pingResp struct {
 	Status string `json:"status"`
 }
 
-// Ping godoc
-// @Summary      Show hello text
-// @Description  friendly response
-// @Tags         Tests
-// @Produce      json
-// @Success      200  {object}  pingResp
-// @Router       /ping/{name} [get]
 func (a *Application) ping(gCtx *gin.Context) {
 	log.Println("ping func")
 	gCtx.JSON(http.StatusOK, gin.H{
@@ -472,7 +532,7 @@ func (a *Application) register(gCtx *gin.Context) {
 		return
 	}
 
-	err = a.repo.Register(&ds.UserUID{
+	err = a.repo.Register(&ds.User{
 		UUID: uuid.New(),
 		Role: role.User,
 		Name: req.Name,
@@ -495,7 +555,6 @@ func generateHashString(s string) string {
 }
 
 func (a *Application) login(gCtx *gin.Context) {
-	log.Println("login")
 	cfg := a.config
 	req := &loginReq{}
 
@@ -506,8 +565,7 @@ func (a *Application) login(gCtx *gin.Context) {
 		return
 	}
 
-	user, err := a.repo.GetUserByLogin(req.Login)
-	log.Println("найден челик", req.Login, "-->", user.Name)
+	user, err := a.repo.GetUserByName(req.Login)
 	if err != nil {
 		gCtx.AbortWithError(http.StatusInternalServerError, err)
 

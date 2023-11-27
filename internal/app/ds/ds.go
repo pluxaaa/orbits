@@ -7,14 +7,7 @@ import (
 )
 
 type User struct {
-	ID       uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	IsModer  *bool
-	Name     string `gorm:"type:varchar(50);unique;not null"`
-	Password string `gorm:"type:varchar(50);not null"`
-}
-
-type UserUID struct {
-	UUID uuid.UUID `gorm:"type:uuid"`
+	UUID uuid.UUID `gorm:"type:uuid;unique"`
 	Name string    `json:"name"`
 	Role role.Role `sql:"type:string;"`
 	Pass string
@@ -32,11 +25,11 @@ type UserUID struct {
 var ReqStatuses = []string{"Черновик", "Удалена", "Отклонена", "Оказана", "На рассмотрении"}
 
 type TransferRequest struct {
-	ID            uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	ClientRefer   uint
-	Client        User `gorm:"foreignKey:ClientRefer"`
-	ModerRefer    uint
-	Moder         User       `gorm:"foreignKey:ModerRefer"`
+	ID            uint       `gorm:"primaryKey;AUTO_INCREMENT"`
+	ClientRefer   uuid.UUID  `gorm:"type:uuid"`
+	Client        User       `gorm:"foreignKey:ClientRefer;references:UUID"`
+	ModerRefer    uuid.UUID  `gorm:"type:uuid"`
+	Moder         User       `gorm:"foreignKey:ModerRefer;references:UUID"`
 	Status        string     `gorm:"type:varchar(20); not null"`
 	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
 	DateProcessed *time.Time `gorm:"type:timestamp"`
