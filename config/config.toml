@@ -1,2 +1,8 @@
-ServiceHost = "0.0.0.0"
-ServicePort = 80
+ServiceHost = "127.0.0.1"
+ServicePort = 8000
+
+[Redis]
+
+# in milliseconds
+DialTimeout = "10s"
+ReadTimeout = "10s"

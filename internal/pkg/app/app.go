@@ -1,12 +1,16 @@
 package app
 
 import (
+	"L1/internal/app/config"
 	"L1/internal/app/ds"
 	"L1/internal/app/dsn"
+	"L1/internal/app/redis"
 	"L1/internal/app/repository"
 	"L1/internal/app/role"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"strings"
 
 	"fmt"
 
@@ -24,15 +28,10 @@ import (
 )
 
 type Application struct {
-	repo   repository.Repository
+	repo   *repository.Repository
 	r      *gin.Engine
-	config struct {
-		JWT struct {
-			Token         string
-			SigningMethod jwt.SigningMethod
-			ExpiresIn     time.Duration
-		}
-	}
+	config *config.Config
+	redis  *redis.Client
 }
 
 type loginReq struct {
@@ -57,27 +56,33 @@ type registerResp struct {
 	Ok bool `json:"ok"`
 }
 
-func New() Application {
-	app := Application{}
+func New(ctx context.Context) (*Application, error) {
+	cfg, err := config.NewConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	repo, _ := repository.New(dsn.FromEnv())
+	repo, err := repository.New(dsn.FromEnv())
+	if err != nil {
+		return nil, err
+	}
 
-	app.repo = *repo
+	redisClient, err := redis.New(ctx, cfg.Redis)
+	if err != nil {
+		return nil, err
+	}
 
-	return app
-
+	return &Application{
+		config: cfg,
+		repo:   repo,
+		redis:  redisClient,
+	}, nil
 }
 
 func (a *Application) StartServer() {
 	log.Println("Server started")
 
 	a.r = gin.Default()
-
-	a.r.LoadHTMLGlob("templates/*.html")
-	a.r.Static("/css", "./templates")
-
-	a.r.POST("/login", a.login)
-	a.r.POST("/sign_up", a.register)
 
 	a.r.GET("orbits", a.getAllOrbits)
 	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
@@ -95,132 +100,14 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 
+	a.r.POST("/login", a.login)
+	a.r.POST("/sign_up", a.register)
+	a.r.POST("/logout", a.logout)
 	a.r.Use(a.WithAuthCheck(role.Moderator)).GET("/ping", a.ping)
 
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
-}
-
-type pingReq struct{}
-type pingResp struct {
-	Status string `json:"status"`
-}
-
-// Ping godoc
-// @Summary      Show hello text
-// @Description  friendly response
-// @Tags         Tests
-// @Produce      json
-// @Success      200  {object}  pingResp
-// @Router       /ping/{name} [get]
-func (a *Application) ping(gCtx *gin.Context) {
-	log.Println("ping func")
-	gCtx.JSON(http.StatusOK, gin.H{
-		"auth": true,
-	})
-}
-
-func (a *Application) register(gCtx *gin.Context) {
-	req := &registerReq{}
-
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
-	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
-		return
-	}
-
-	if req.Pass == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
-		return
-	}
-
-	if req.Name == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
-		return
-	}
-
-	err = a.repo.Register(&ds.UserUID{
-		UUID: uuid.New(),
-		Role: role.User,
-		Name: req.Name,
-		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
-	})
-	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-
-	gCtx.JSON(http.StatusOK, &registerResp{
-		Ok: true,
-	})
-}
-
-func generateHashString(s string) string {
-	h := sha1.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-func (a *Application) login(gCtx *gin.Context) {
-	log.Println("login")
-	cfg := a.config
-	req := &loginReq{}
-
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
-	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
-
-		return
-	}
-
-	user, err := a.repo.GetUserByLogin(req.Login)
-	log.Println("найден челик", req.Login, "-->", user.Name)
-	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
-
-		return
-	}
-
-	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
-		// значит проверка пройдена
-		log.Println("проверка пройдена")
-		// генерируем ему jwt
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &ds.JWTClaims{
-			StandardClaims: jwt.StandardClaims{
-				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(),
-				IssuedAt:  time.Now().Unix(),
-				Issuer:    "web-admin",
-			},
-			UserUUID: uuid.New(), // test uuid
-			Role:     user.Role,
-		})
-
-		if token == nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
-
-			return
-		}
-
-		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
-		if err != nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
-
-			return
-		}
-
-		gCtx.JSON(http.StatusOK, loginResp{
-			Username:    user.Name,
-			Role:        user.Role,
-			AccessToken: strToken,
-			TokenType:   "Bearer",
-			ExpiresIn:   cfg.JWT.ExpiresIn,
-		})
-
-		gCtx.AbortWithStatus(http.StatusOK)
-	} else {
-		gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
-	}
 }
 
 func (a *Application) getAllOrbits(c *gin.Context) {
@@ -545,4 +432,158 @@ func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 	}
 
 	c.String(http.StatusCreated, "Transfer-to-Orbit m-m was deleted")
+}
+
+type pingReq struct{}
+type pingResp struct {
+	Status string `json:"status"`
+}
+
+// Ping godoc
+// @Summary      Show hello text
+// @Description  friendly response
+// @Tags         Tests
+// @Produce      json
+// @Success      200  {object}  pingResp
+// @Router       /ping/{name} [get]
+func (a *Application) ping(gCtx *gin.Context) {
+	log.Println("ping func")
+	gCtx.JSON(http.StatusOK, gin.H{
+		"auth": true,
+	})
+}
+
+func (a *Application) register(gCtx *gin.Context) {
+	req := &registerReq{}
+
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	if req.Pass == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		return
+	}
+
+	if req.Name == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		return
+	}
+
+	err = a.repo.Register(&ds.UserUID{
+		UUID: uuid.New(),
+		Role: role.User,
+		Name: req.Name,
+		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	gCtx.JSON(http.StatusOK, &registerResp{
+		Ok: true,
+	})
+}
+
+func generateHashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (a *Application) login(gCtx *gin.Context) {
+	log.Println("login")
+	cfg := a.config
+	req := &loginReq{}
+
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+
+		return
+	}
+
+	user, err := a.repo.GetUserByLogin(req.Login)
+	log.Println("найден челик", req.Login, "-->", user.Name)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+		// значит проверка пройдена
+		log.Println("проверка пройдена")
+		// генерируем ему jwt
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &ds.JWTClaims{
+			StandardClaims: jwt.StandardClaims{
+				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(),
+				IssuedAt:  time.Now().Unix(),
+				Issuer:    "web-admin",
+			},
+			UserUUID: uuid.New(), // test uuid
+			Role:     user.Role,
+		})
+
+		if token == nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+
+			return
+		}
+
+		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
+		if err != nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+
+			return
+		}
+
+		gCtx.JSON(http.StatusOK, loginResp{
+			Username:    user.Name,
+			Role:        user.Role,
+			AccessToken: strToken,
+			TokenType:   "Bearer",
+			ExpiresIn:   cfg.JWT.ExpiresIn,
+		})
+
+		gCtx.AbortWithStatus(http.StatusOK)
+	} else {
+		gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+	}
+}
+
+func (a *Application) logout(gCtx *gin.Context) {
+	// получаем заголовок
+	jwtStr := gCtx.GetHeader("Authorization")
+	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
+		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
+
+		return // завершаем обработку
+	}
+
+	// отрезаем префикс
+	jwtStr = jwtStr[len(jwtPrefix):]
+
+	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(a.config.JWT.Token), nil
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		log.Println(err)
+
+		return
+	}
+
+	// сохраняем в блеклист редиса
+	err = a.redis.WriteJWTToBlackList(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+
+		return
+	}
+
+	gCtx.Status(http.StatusOK)
 }
