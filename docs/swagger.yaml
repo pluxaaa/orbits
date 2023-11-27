@@ -1,0 +1,30 @@
+basePath: /
+definitions:
+  app.pingResp:
+    properties:
+      status:
+        type: string
+    type: object
+host: 127.0.0.1:8000
+info:
+  contact: {}
+  description: orbit transfer
+  title: orbits
+  version: 0.0-0
+paths:
+  /ping/{name}:
+    get:
+      description: friendly response
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/app.pingResp'
+      summary: Show hello text
+      tags:
+      - Tests
+schemes:
+- http
+swagger: "2.0"

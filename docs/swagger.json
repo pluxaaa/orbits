@@ -1,0 +1,46 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "orbit transfer",
+        "title": "orbits",
+        "contact": {},
+        "version": "0.0-0"
+    },
+    "host": "127.0.0.1:8000",
+    "basePath": "/",
+    "paths": {
+        "/ping/{name}": {
+            "get": {
+                "description": "friendly response",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tests"
+                ],
+                "summary": "Show hello text",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/app.pingResp"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "app.pingResp": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
