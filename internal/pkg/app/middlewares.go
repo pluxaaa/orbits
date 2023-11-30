@@ -15,9 +15,29 @@ import (
 
 const jwtPrefix = "Bearer "
 
+func GetJWTToken(gCtx *gin.Context) (string, error) {
+	jwtStr := gCtx.GetHeader("Authorization")
+
+	if jwtStr == "" {
+		log.Println("getting JWT cookie")
+		var cookieErr error
+		jwtStr, cookieErr = gCtx.Cookie("orbits-api-token")
+		if cookieErr != nil {
+			gCtx.AbortWithStatus(http.StatusBadRequest)
+			return "", cookieErr
+		}
+	}
+
+	return jwtStr, nil
+}
+
 func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Context) {
 	return func(gCtx *gin.Context) {
-		jwtStr := gCtx.GetHeader("Authorization")
+		jwtStr, err := GetJWTToken(gCtx)
+		if err != nil {
+			panic(err)
+		}
+
 		if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
 			gCtx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
 
@@ -27,7 +47,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Co
 		// отрезаем префикс
 		jwtStr = jwtStr[len(jwtPrefix):]
 		// проверяем jwt в блеклист редиса
-		err := a.redis.CheckJWTInBlackList(gCtx.Request.Context(), jwtStr)
+		err = a.redis.CheckJWTInBlackList(gCtx.Request.Context(), jwtStr)
 		if err == nil { // значит что токен в блеклисте
 			gCtx.AbortWithStatus(http.StatusForbidden)
 
@@ -57,7 +77,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Co
 			}
 		}
 		gCtx.AbortWithStatus(http.StatusForbidden)
-		log.Println("Роль ", myClaims.Role, "не указана в ", assignedRoles)
+		//log.Println("Роль ", myClaims.Role, "не указана в ", assignedRoles)
 
 		return
 

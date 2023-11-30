@@ -4,12 +4,13 @@ import (
 	"L1/internal/app/config"
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/go-redis/redis/v8"
 )
 
-const servicePrefix = "orbits-back."
+const servicePrefix = "orbits-api."
 
 type Client struct {
 	cfg    config.RedisConfig
@@ -33,8 +34,10 @@ func New(ctx context.Context, cfg config.RedisConfig) (*Client, error) {
 	client.client = redisClient
 
 	if _, err := redisClient.Ping(ctx).Result(); err != nil {
+		log.Println("!!! NO REDIS !!!")
 		return nil, fmt.Errorf("can't ping redis: %w", err)
 	}
+	log.Println("REDIS CLIENT: ", client.cfg)
 
 	return client, nil
 }

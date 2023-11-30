@@ -15,33 +15,241 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/ping/{name}": {
+        "/orbits": {
             "get": {
-                "description": "friendly response",
+                "description": "Возвращает всех доступные орбиты",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Tests"
+                    "orbits"
                 ],
-                "summary": "Show hello text",
+                "summary": "Получение всех орбит со статусом \"Доступна\"",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Название орбиты или его часть",
+                        "name": "orbit_name",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "302": {
+                        "description": "Found",
                         "schema": {
-                            "$ref": "#/definitions/app.pingResp"
+                            "type": ""
                         }
                     }
                 }
             }
-        }
-    },
-    "definitions": {
-        "app.pingResp": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string"
+        },
+        "/orbits/add": {
+            "post": {
+                "description": "Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "general"
+                ],
+                "summary": "Добавление орбиты в заявку на трансфер",
+                "responses": {
+                    "302": {
+                        "description": "Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/new_orbit": {
+            "post": {
+                "description": "Добавляет орбиту с полями, указанныим в JSON",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orbits"
+                ],
+                "summary": "Добавление новой орбиты",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/{orbit}": {
+            "get": {
+                "description": "Возвращает подробную информацию об орбите по ее названию",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orbits"
+                ],
+                "summary": "Получение детализированной информации об орбите",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Название орбиты",
+                        "name": "orbit_name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/{orbit}/edit": {
+            "put": {
+                "description": "Обновляет данные об орбите, основываясь на полях из JSON",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orbits"
+                ],
+                "summary": "Изменение орбиты",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer-requests/{transferID}/client_change_status": {
+            "put": {
+                "description": "Изменяет статус заявки на трансфер на любой из доступных для клиента",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfer requests"
+                ],
+                "summary": "Изменение статуса заявки на трансфер (для клиента)",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer-requests/{transferID}/moder_change_status": {
+            "put": {
+                "description": "Изменяет статус заявки на трансфер на любой из доступных для модератора",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfer requests"
+                ],
+                "summary": "Изменение статуса заявки на трансфер (для модератора)",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer_requests": {
+            "get": {
+                "description": "Получает все заявки на трансфер",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfer requests"
+                ],
+                "summary": "Получение всех заявок на трансфер",
+                "responses": {
+                    "302": {
+                        "description": "Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer_requests/{req_id}": {
+            "get": {
+                "description": "Получает подробную информаицю о заявке на трансфер",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfer requests"
+                ],
+                "summary": "Получение детализированной заявки на трансфер",
+                "responses": {
+                    "302": {
+                        "description": "Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer_requests/{req_id}/delete": {
+            "post": {
+                "description": "Изменяет статус заявки на трансфер на \"Удалена\"",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transfer requests"
+                ],
+                "summary": "Логическое удаление заявки на трансфер",
+                "responses": {
+                    "302": {
+                        "description": "Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
                 }
             }
         }
@@ -51,7 +259,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "0.0-0",
-	Host:             "127.0.0.1:8000",
+	Host:             "localhost:8000",
 	BasePath:         "/",
 	Schemes:          []string{"http"},
 	Title:            "orbits",

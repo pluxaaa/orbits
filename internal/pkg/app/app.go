@@ -123,7 +123,7 @@ func (a *Application) StartServer() {
 // @Accept json
 // @Produce json
 // @Success 302 {} json
-// @Param orbit_name query string false "Название орбиты"
+// @Param orbit_name query string false "Название орбиты или его часть"
 // @Router /orbits [get]
 func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
@@ -142,7 +142,7 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 // @Description  Возвращает подробную информацию об орбите по ее названию
 // @Tags         orbits
 // @Produce      json
-// @Param orbit_name string true "Название орбиты"
+// @Param orbit_name path string true "Название орбиты"
 // @Success      200  {object}  string
 // @Router       /orbits/{orbit} [get]
 func (a *Application) getDetailedOrbit(c *gin.Context) {
@@ -216,7 +216,7 @@ func (a *Application) newOrbit(c *gin.Context) {
 // @Summary      Изменение орбиты
 // @Description  Обновляет данные об орбите, основываясь на полях из JSON
 // @Tags         orbits
-// @Accept json
+// @Accept 		 json
 // @Produce      json
 // @Success      200  {object}  string
 // @Router       /orbits/{orbit}/edit [put]
@@ -314,7 +314,7 @@ func (a *Application) getAllRequests(c *gin.Context) {
 // @Tags         transfer requests
 // @Produce      json
 // @Success      302  {object}  string
-// @Router       /transfer_requests/{transfer_request} [get]
+// @Router       /transfer_requests/{req_id} [get]
 func (a *Application) getDetailedRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
@@ -352,7 +352,7 @@ func (a *Application) getRequestsByStatus(c *gin.Context) {
 // @Accept json
 // @Produce      json
 // @Success      201  {object}  string
-// @Router       transfer_requests/{transfer_request}/moder_change_status [put]
+// @Router /transfer-requests/{transferID}/moder_change_status [put]
 func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -406,7 +406,7 @@ func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 // @Accept json
 // @Produce      json
 // @Success      201  {object}  string
-// @Router       transfer_requests/{transfer_request}/client_change_status [put]
+// @Router /transfer-requests/{transferID}/client_change_status [put]
 func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -459,7 +459,7 @@ func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 // @Accept json
 // @Produce      json
 // @Success      302  {object}  string
-// @Router       transfer_requests/{transfer_requests}/delete [post]
+// @Router /transfer_requests/{req_id}/delete [post]
 func (a *Application) deleteTransferRequest(c *gin.Context) {
 	req_id, err1 := strconv.Atoi(c.Param("req_id"))
 	if err1 != nil {
@@ -506,29 +506,29 @@ type pingResp struct {
 	Status string `json:"status"`
 }
 
-func (a *Application) ping(gCtx *gin.Context) {
+func (a *Application) ping(c *gin.Context) {
 	log.Println("ping func")
-	gCtx.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"auth": true,
 	})
 }
 
-func (a *Application) register(gCtx *gin.Context) {
+func (a *Application) register(c *gin.Context) {
 	req := &registerReq{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(c.Request.Body).Decode(req)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
 	if req.Pass == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
 		return
 	}
 
 	if req.Name == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
 		return
 	}
 
@@ -539,11 +539,11 @@ func (a *Application) register(gCtx *gin.Context) {
 		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
-	gCtx.JSON(http.StatusOK, &registerResp{
+	c.JSON(http.StatusOK, &registerResp{
 		Ok: true,
 	})
 }
@@ -554,20 +554,20 @@ func generateHashString(s string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func (a *Application) login(gCtx *gin.Context) {
+func (a *Application) login(c *gin.Context) {
 	cfg := a.config
 	req := &loginReq{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(c.Request.Body).Decode(req)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		c.AbortWithError(http.StatusBadRequest, err)
 
 		return
 	}
 
 	user, err := a.repo.GetUserByName(req.Login)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 
 		return
 	}
@@ -578,7 +578,7 @@ func (a *Application) login(gCtx *gin.Context) {
 		// генерируем ему jwt
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &ds.JWTClaims{
 			StandardClaims: jwt.StandardClaims{
-				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(),
+				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(), //1h
 				IssuedAt:  time.Now().Unix(),
 				Issuer:    "web-admin",
 			},
@@ -587,19 +587,21 @@ func (a *Application) login(gCtx *gin.Context) {
 		})
 
 		if token == nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
 
 			return
 		}
 
 		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
 		if err != nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
 
 			return
 		}
 
-		gCtx.JSON(http.StatusOK, loginResp{
+		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Second*3600).Unix()), "", "", true, true)
+
+		c.JSON(http.StatusOK, loginResp{
 			Username:    user.Name,
 			Role:        user.Role,
 			AccessToken: strToken,
@@ -607,17 +609,22 @@ func (a *Application) login(gCtx *gin.Context) {
 			ExpiresIn:   cfg.JWT.ExpiresIn,
 		})
 
-		gCtx.AbortWithStatus(http.StatusOK)
+		c.AbortWithStatus(http.StatusOK)
 	} else {
-		gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+		c.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
 	}
 }
 
-func (a *Application) logout(gCtx *gin.Context) {
+func (a *Application) logout(c *gin.Context) {
 	// получаем заголовок
-	jwtStr := gCtx.GetHeader("Authorization")
+
+	jwtStr, err := GetJWTToken(c)
+	if err != nil {
+		panic(err)
+	}
+
 	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
+		c.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
 
 		return // завершаем обработку
 	}
@@ -625,23 +632,23 @@ func (a *Application) logout(gCtx *gin.Context) {
 	// отрезаем префикс
 	jwtStr = jwtStr[len(jwtPrefix):]
 
-	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	_, err = jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.config.JWT.Token), nil
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		c.AbortWithError(http.StatusBadRequest, err)
 		log.Println(err)
 
 		return
 	}
 
 	// сохраняем в блеклист редиса
-	err = a.redis.WriteJWTToBlackList(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	err = a.redis.WriteJWTToBlackList(c.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 
 		return
 	}
 
-	gCtx.Status(http.StatusOK)
+	c.Status(http.StatusOK)
 }

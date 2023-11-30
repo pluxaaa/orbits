@@ -10,7 +10,7 @@ import (
 // @version 0.0-0
 // @description orbit transfer
 
-// @host 127.0.0.1:8000
+// @host localhost:8000
 // @schemes http
 // @BasePath /
 

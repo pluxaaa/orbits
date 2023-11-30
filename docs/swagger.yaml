@@ -1,30 +1,167 @@
 basePath: /
-definitions:
-  app.pingResp:
-    properties:
-      status:
-        type: string
-    type: object
-host: 127.0.0.1:8000
+host: localhost:8000
 info:
   contact: {}
   description: orbit transfer
   title: orbits
   version: 0.0-0
 paths:
-  /ping/{name}:
+  /orbits:
     get:
-      description: friendly response
+      consumes:
+      - application/json
+      description: Возвращает всех доступные орбиты
+      parameters:
+      - description: Название орбиты или его часть
+        in: query
+        name: orbit_name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+          schema:
+            type: ""
+      summary: Получение всех орбит со статусом "Доступна"
+      tags:
+      - orbits
+  /orbits/{orbit}:
+    get:
+      description: Возвращает подробную информацию об орбите по ее названию
+      parameters:
+      - description: Название орбиты
+        in: path
+        name: orbit_name
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/app.pingResp'
-      summary: Show hello text
+            type: string
+      summary: Получение детализированной информации об орбите
       tags:
-      - Tests
+      - orbits
+  /orbits/{orbit}/edit:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет данные об орбите, основываясь на полях из JSON
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Изменение орбиты
+      tags:
+      - orbits
+  /orbits/add:
+    post:
+      consumes:
+      - application/json
+      description: Создает заявку на трансфер в статусе (или добавляет в открытую)
+        и добавляет выбранную орбиту
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+          schema:
+            type: string
+      summary: Добавление орбиты в заявку на трансфер
+      tags:
+      - general
+  /orbits/new_orbit:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет орбиту с полями, указанныим в JSON
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Добавление новой орбиты
+      tags:
+      - orbits
+  /transfer-requests/{transferID}/client_change_status:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет статус заявки на трансфер на любой из доступных для клиента
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Изменение статуса заявки на трансфер (для клиента)
+      tags:
+      - transfer requests
+  /transfer-requests/{transferID}/moder_change_status:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет статус заявки на трансфер на любой из доступных для модератора
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Изменение статуса заявки на трансфер (для модератора)
+      tags:
+      - transfer requests
+  /transfer_requests:
+    get:
+      description: Получает все заявки на трансфер
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+          schema:
+            type: string
+      summary: Получение всех заявок на трансфер
+      tags:
+      - transfer requests
+  /transfer_requests/{req_id}:
+    get:
+      description: Получает подробную информаицю о заявке на трансфер
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+          schema:
+            type: string
+      summary: Получение детализированной заявки на трансфер
+      tags:
+      - transfer requests
+  /transfer_requests/{req_id}/delete:
+    post:
+      consumes:
+      - application/json
+      description: Изменяет статус заявки на трансфер на "Удалена"
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Found
+          schema:
+            type: string
+      summary: Логическое удаление заявки на трансфер
+      tags:
+      - transfer requests
 schemes:
 - http
 swagger: "2.0"
