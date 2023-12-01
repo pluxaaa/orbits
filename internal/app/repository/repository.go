@@ -3,7 +3,10 @@ package repository
 import (
 	"L1/internal/app/ds"
 	mClient "L1/internal/app/minio"
+	"L1/internal/app/role"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -70,22 +73,32 @@ func (r *Repository) GetOrbitByID(id uint) (*ds.Orbit, error) {
 	return orbit, nil
 }
 
-func (r *Repository) GetAllOrbits(orbitName string) ([]ds.Orbit, error) {
+func (r *Repository) GetAllOrbits(orbitName, orbitIncl, isCircle string) ([]ds.Orbit, error) {
 	orbits := []ds.Orbit{}
-	if orbitName == "" {
-		err := r.db.Where("is_available = ?", true).
-			Order("id").Find(&orbits).Error
+	qry := r.db
+	if orbitName != "" {
+		log.Println("orbitName")
+		qry = qry.Where("name ILIKE ?", "%"+orbitName+"%")
+	}
 
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err := r.db.Where("is_available = ?", true).Where("name ILIKE ?", "%"+orbitName+"%").
-			Order("id").Find(&orbits).Error
+	if orbitIncl != "" {
+		log.Println("incl")
+		qry = qry.Where("inclination::float > ?", orbitIncl)
+	}
 
-		if err != nil {
-			return nil, err
+	if isCircle != "" {
+		log.Println("circle")
+		if isCircle == "1" {
+			qry = qry.Where("apogee = perigee")
+		} else {
+			qry = qry.Where("apogee != perigee")
 		}
+	}
+
+	err := qry.Order("name").Find(&orbits).Error
+
+	if err != nil {
+		return nil, err
 	}
 
 	return orbits, nil
@@ -148,10 +161,14 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 
 	if editingOrbit.ImageURL != originalOrbit.ImageURL && editingOrbit.ImageURL != "" {
 		log.Println("REPLACING IMAGE")
-		err := r.deleteImageFromMinio(originalOrbit.ImageURL)
-		if err != nil {
-			return err
+
+		if originalOrbit.ImageURL != "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg" {
+			err := r.deleteImageFromMinio(originalOrbit.ImageURL)
+			if err != nil {
+				return err
+			}
 		}
+
 		imageURL, err := r.uploadImageToMinio(editingOrbit.ImageURL)
 		if err != nil {
 			return err
@@ -208,11 +225,26 @@ func extractObjectNameFromURL(imageURL string) string {
 // --------------------------- TRANSFER_REQUESTS METHODS ---------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) GetAllRequests() ([]ds.TransferRequest, error) {
+func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin string) ([]ds.TransferRequest, error) {
 
 	requests := []ds.TransferRequest{}
+	qry := r.db
 
-	err := r.db.
+	if dateStart != "" && dateFin != "" {
+		qry = qry.Where("date_processed BETWEEN ? AND ?", dateStart, dateFin)
+	} else if dateStart != "" {
+		qry = qry.Where("date_processed >= ?", dateStart)
+	} else if dateFin != "" {
+		qry = qry.Where("date_processed <= ?", dateFin)
+	}
+
+	if userRole == role.Moderator {
+		qry = qry.Where("status = ?", ds.ReqStatuses[4])
+	} else {
+		qry = qry.Where("status IN ?", ds.ReqStatuses[:2])
+	}
+
+	err := qry.
 		Preload("Client").Preload("Moder"). //данные для полей типа User: {ID, Name, IsModer)
 		Order("id").
 		Find(&requests).Error
@@ -400,4 +432,10 @@ func (r *Repository) Register(user *ds.User) error {
 	}
 
 	return r.db.Create(user).Error
+}
+
+func (r *Repository) GenerateHashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }

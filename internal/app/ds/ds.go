@@ -22,7 +22,12 @@ type User struct {
 5. Отклонена - не одобрена модератором (завершена неуспешно)
 */
 
-var ReqStatuses = []string{"Черновик", "Удалена", "Отклонена", "Оказана", "На рассмотрении"}
+var ReqStatuses = []string{
+	"Черновик",
+	"Удалена",
+	"Отклонена",
+	"Оказана",
+	"На рассмотрении"}
 
 type TransferRequest struct {
 	ID            uint       `gorm:"primaryKey;AUTO_INCREMENT"`

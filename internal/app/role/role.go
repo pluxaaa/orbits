@@ -3,7 +3,7 @@ package role
 type Role int
 
 const (
-	Undefined Role = iota
-	User
+	Guest Role = iota
+	Client
 	Moderator
 )

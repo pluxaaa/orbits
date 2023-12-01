@@ -4,13 +4,12 @@ import (
 	"L1/internal/app/ds"
 	"L1/internal/app/role"
 	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/golang-jwt/jwt"
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt"
 )
 
 const jwtPrefix = "Bearer "
@@ -19,7 +18,7 @@ func GetJWTToken(gCtx *gin.Context) (string, error) {
 	jwtStr := gCtx.GetHeader("Authorization")
 
 	if jwtStr == "" {
-		log.Println("getting JWT cookie")
+		log.Println("getting JWT from cookie")
 		var cookieErr error
 		jwtStr, cookieErr = gCtx.Cookie("orbits-api-token")
 		if cookieErr != nil {
@@ -31,56 +30,73 @@ func GetJWTToken(gCtx *gin.Context) (string, error) {
 	return jwtStr, nil
 }
 
-func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Context) {
-	return func(gCtx *gin.Context) {
-		jwtStr, err := GetJWTToken(gCtx)
+func GetUserClaims(jwtStr string, gCtx *gin.Context, a *Application) (*ds.JWTClaims, error) {
+	token, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(a.config.JWT.Token), nil
+	})
+	if err != nil {
+		gCtx.AbortWithStatus(http.StatusForbidden)
+		log.Println(err)
+
+		return nil, err
+	}
+
+	return token.Claims.(*ds.JWTClaims), nil
+}
+
+func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gin.Context) {
+	return func(c *gin.Context) {
+		jwtStr, err := GetJWTToken(c)
 		if err != nil {
 			panic(err)
 		}
 
-		if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-			gCtx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
+		if !strings.HasPrefix(jwtStr, jwtPrefix) {
+			c.AbortWithStatus(http.StatusForbidden)
 
-			return // завершаем обработку
+			return
 		}
 
-		// отрезаем префикс
 		jwtStr = jwtStr[len(jwtPrefix):]
-		// проверяем jwt в блеклист редиса
-		err = a.redis.CheckJWTInBlackList(gCtx.Request.Context(), jwtStr)
+
+		err = a.redis.CheckJWTInBlackList(c.Request.Context(), jwtStr)
 		if err == nil { // значит что токен в блеклисте
-			gCtx.AbortWithStatus(http.StatusForbidden)
+			c.AbortWithStatus(http.StatusForbidden)
 
 			return
 		}
+
 		if !errors.Is(err, redis.Nil) { // значит что это не ошибка отсуствия - внутренняя ошибка
-			gCtx.AbortWithError(http.StatusInternalServerError, err)
-
+			c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
 
-		token, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-			return []byte(a.config.JWT.Token), nil
-		})
+		myClaims, err := GetUserClaims(jwtStr, c, a)
 		if err != nil {
-			gCtx.AbortWithStatus(http.StatusForbidden)
-			log.Println(err)
-
+			panic(err)
 			return
 		}
 
-		myClaims := token.Claims.(*ds.JWTClaims)
+		isAssigned := false
 
 		for _, oneOfAssignedRole := range assignedRoles {
 			if myClaims.Role == oneOfAssignedRole {
-				gCtx.Next()
+				isAssigned = true
+				break
 			}
 		}
-		gCtx.AbortWithStatus(http.StatusForbidden)
-		//log.Println("Роль ", myClaims.Role, "не указана в ", assignedRoles)
 
-		return
+		if !isAssigned {
+			c.AbortWithStatus(http.StatusForbidden)
+			log.Printf("Роль %d не указана в %d", myClaims.Role, assignedRoles)
+			return
+		}
 
+		log.Println("AssignedRoles: ", assignedRoles, "\n",
+			"UserRoles: ", myClaims.Role)
+
+		c.Set("role", myClaims.Role)
+		c.Set("userUUID", myClaims.UserUUID)
 	}
 
 }

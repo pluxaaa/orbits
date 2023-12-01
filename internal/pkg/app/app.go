@@ -9,14 +9,11 @@ import (
 	"L1/internal/app/repository"
 	"L1/internal/app/role"
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"strings"
 
 	"fmt"
-
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/gin-gonic/gin"
 
@@ -88,29 +85,43 @@ func (a *Application) StartServer() {
 
 	a.r = gin.Default()
 
-	a.r.GET("orbits", a.getAllOrbits)
-	a.r.GET("orbits/:orbit_name", a.getDetailedOrbit)
-	a.r.PUT("orbits/:orbit_name/edit", a.editOrbit)
-	a.r.POST("orbits/new_orbit", a.newOrbit)
-	a.r.POST("orbits/:orbit_name/add", a.addOrbitToRequest)
-	a.r.DELETE("orbits/change_status/:orbit_name", a.changeOrbitStatus)
-
-	a.r.GET("transfer_requests", a.getAllRequests)
-	a.r.GET("transfer_requests/:req_id", a.getDetailedRequest)
-	a.r.GET("transfer_requests/status/:status", a.getRequestsByStatus)
-	a.r.PUT("transfer_requests/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
-	a.r.PUT("transfer_requests/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
-	a.r.POST("transfer_requests/:req_id/delete", a.deleteTransferRequest)
-
-	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
-
 	docs.SwaggerInfo.BasePath = "/"
 	a.r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	a.r.POST("/login", a.login)
 	a.r.POST("/sign_up", a.register)
 	a.r.POST("/logout", a.logout)
-	a.r.Use(a.WithAuthCheck(role.Moderator)).GET("/ping", a.ping)
+
+	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
+
+	orbitGroup := a.r.Group("/orbits")
+	{
+		orbitGroup.GET("", a.getAllOrbits)
+		orbitGroup.GET("/:orbit_name", a.getDetailedOrbit)
+
+		orbitGroup.Use(a.WithAuthCheck(role.Moderator))
+		{
+			orbitGroup.PUT("/:orbit_name/edit", a.editOrbit)
+			orbitGroup.POST("/new_orbit", a.newOrbit)
+			orbitGroup.POST("/:orbit_name/add", a.addOrbitToRequest)
+			orbitGroup.DELETE("/change_status/:orbit_name", a.changeOrbitStatus)
+		}
+	}
+
+	transferReqGroup := a.r.Group("/transfer_requests")
+	{
+		transferReqGroup.Use(a.WithAuthCheck(role.Moderator, role.Client))
+		{
+			transferReqGroup.GET("/", a.getAllRequests)
+			transferReqGroup.GET("/:req_id", a.getDetailedRequest)
+			transferReqGroup.GET("/status/:status", a.getRequestsByStatus)
+			transferReqGroup.PUT("/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
+			transferReqGroup.PUT("/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
+			transferReqGroup.POST("/:req_id/delete", a.deleteTransferRequest)
+		}
+	}
+
+	a.r.GET("/ping", a.ping)
 
 	a.r.Run(":8000")
 
@@ -127,8 +138,10 @@ func (a *Application) StartServer() {
 // @Router /orbits [get]
 func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
+	orbitIncl := c.Query("orbit_incl")
+	isCircle := c.Query("is_circle")
 
-	allOrbits, err := a.repo.GetAllOrbits(orbitName)
+	allOrbits, err := a.repo.GetAllOrbits(orbitName, orbitIncl, isCircle)
 
 	if err != nil {
 		c.Error(err)
@@ -299,7 +312,19 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 // @Success      302  {object}  string
 // @Router       /transfer_requests [get]
 func (a *Application) getAllRequests(c *gin.Context) {
-	requests, err := a.repo.GetAllRequests()
+	dateStart := c.Query("date_start")
+	dateFin := c.Query("date_fin")
+
+	userRole, exists := c.Get("role")
+	if !exists {
+		panic(exists)
+	}
+	//userUUID, exists := c.Get("userUUID")
+	//if !exists {
+	//	panic(exists)
+	//}
+
+	requests, err := a.repo.GetAllRequests(userRole, dateStart, dateFin)
 
 	if err != nil {
 		c.Error(err)
@@ -501,11 +526,6 @@ func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 	c.String(http.StatusCreated, "Transfer-to-Orbit m-m was deleted")
 }
 
-type pingReq struct{}
-type pingResp struct {
-	Status string `json:"status"`
-}
-
 func (a *Application) ping(c *gin.Context) {
 	log.Println("ping func")
 	c.JSON(http.StatusOK, gin.H{
@@ -534,9 +554,9 @@ func (a *Application) register(c *gin.Context) {
 
 	err = a.repo.Register(&ds.User{
 		UUID: uuid.New(),
-		Role: role.User,
+		Role: role.Client,
 		Name: req.Name,
-		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+		Pass: a.repo.GenerateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
 	})
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -546,12 +566,6 @@ func (a *Application) register(c *gin.Context) {
 	c.JSON(http.StatusOK, &registerResp{
 		Ok: true,
 	})
-}
-
-func generateHashString(s string) string {
-	h := sha1.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (a *Application) login(c *gin.Context) {
@@ -572,7 +586,7 @@ func (a *Application) login(c *gin.Context) {
 		return
 	}
 
-	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+	if req.Login == user.Name && user.Pass == a.repo.GenerateHashString(req.Password) {
 		// значит проверка пройдена
 		log.Println("проверка пройдена")
 		// генерируем ему jwt
@@ -582,7 +596,7 @@ func (a *Application) login(c *gin.Context) {
 				IssuedAt:  time.Now().Unix(),
 				Issuer:    "web-admin",
 			},
-			UserUUID: uuid.New(), // test uuid
+			UserUUID: user.UUID,
 			Role:     user.Role,
 		})
 
