@@ -43,9 +43,9 @@ type loginReq struct {
 type loginResp struct {
 	Username    string
 	Role        role.Role
-	ExpiresIn   time.Duration `json:"expires_in"`
-	AccessToken string        `json:"access_token"`
-	TokenType   string        `json:"token_type"`
+	ExpiresIn   int    `json:"expires_in"`
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
 }
 
 type registerReq struct {
@@ -56,6 +56,8 @@ type registerReq struct {
 type registerResp struct {
 	Ok bool `json:"ok"`
 }
+
+type jsonMap map[string]string
 
 func New(ctx context.Context) (*Application, error) {
 	cfg, err := config.NewConfig(ctx)
@@ -130,7 +132,7 @@ func (a *Application) StartServer() {
 
 // @Summary Получение всех орбит со статусом "Доступна"
 // @Description Возвращает всех доступные орбиты
-// @Tags orbits
+// @Tags Орбиты
 // @Accept json
 // @Produce json
 // @Success 302 {} json
@@ -153,11 +155,11 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 
 // @Summary      Получение детализированной информации об орбите
 // @Description  Возвращает подробную информацию об орбите по ее названию
-// @Tags         orbits
+// @Tags         Орбиты
 // @Produce      json
 // @Param orbit_name path string true "Название орбиты"
 // @Success      200  {object}  string
-// @Router       /orbits/{orbit} [get]
+// @Router       /orbits/{orbit_name} [get]
 func (a *Application) getDetailedOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -195,10 +197,10 @@ func (a *Application) changeOrbitStatus(c *gin.Context) {
 
 // @Summary      Добавление новой орбиты
 // @Description  Добавляет орбиту с полями, указанныим в JSON
-// @Tags orbits
+// @Tags Орбиты
 // @Accept json
 // @Produce      json
-// @Body json
+// @Param orbit body ds.Orbit true "Данные новой орбиты"
 // @Success      201  {object}  string
 // @Router       /orbits/new_orbit [post]
 func (a *Application) newOrbit(c *gin.Context) {
@@ -228,11 +230,12 @@ func (a *Application) newOrbit(c *gin.Context) {
 
 // @Summary      Изменение орбиты
 // @Description  Обновляет данные об орбите, основываясь на полях из JSON
-// @Tags         orbits
+// @Tags         Орбиты
 // @Accept 		 json
 // @Produce      json
-// @Success      200  {object}  string
-// @Router       /orbits/{orbit}/edit [put]
+// @Param orbit body ds.Orbit false "Орбита"
+// @Success      201  {object}  string
+// @Router       /orbits/{orbit_name}/edit [put]
 func (a *Application) editOrbit(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
@@ -250,7 +253,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusCreated, gin.H{
 		"ID":          editingOrbit.ID,
 		"Name":        editingOrbit.Name,
 		"IsAvailable": editingOrbit.IsAvailable,
@@ -264,35 +267,33 @@ func (a *Application) editOrbit(c *gin.Context) {
 
 // @Summary      Добавление орбиты в заявку на трансфер
 // @Description  Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
-// @Tags general
+// @Tags Общее
 // @Accept json
 // @Produce      json
 // @Success      302  {object}  string
-// @Router       /orbits/add [post]
+// @Param Body body jsonMap true "Данные заказа"
+// @Router       /orbits/{orbit_name}/add [post]
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
-	//получение инфы об орбите -> orbit.ID
+	// Получение инфы об орбите -> orbit.ID
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	// вместо структуры для json использую map
-	// map: key-value
-	// jsonMap: string-int
-	// можно использовать string-interface{} (определяемый тип, в данном случае - пустой)
-	// тогда будет jsonMap["client_id"].int
-	var jsonMap map[string]string
 
-	if err = c.BindJSON(&jsonMap); err != nil {
+	var requestData jsonMap
+
+	if err = c.BindJSON(&requestData); err != nil {
 		c.Error(err)
 		return
 	}
-	log.Println("c_name: ", jsonMap)
+
+	log.Println("c_name: ", requestData)
 
 	request := &ds.TransferRequest{}
-	request, err = a.repo.CreateTransferRequest(jsonMap["client_name"])
+	request, err = a.repo.CreateTransferRequest(requestData["client_name"])
 	if err != nil {
 		c.Error(err)
 		return
@@ -307,7 +308,7 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 
 // @Summary      Получение всех заявок на трансфер
 // @Description  Получает все заявки на трансфер
-// @Tags         transfer requests
+// @Tags         Заявки на трансфер
 // @Produce      json
 // @Success      302  {object}  string
 // @Router       /transfer_requests [get]
@@ -336,9 +337,10 @@ func (a *Application) getAllRequests(c *gin.Context) {
 
 // @Summary      Получение детализированной заявки на трансфер
 // @Description  Получает подробную информаицю о заявке на трансфер
-// @Tags         transfer requests
+// @Tags         Заявки на трансфер
 // @Produce      json
-// @Success      302  {object}  string
+// @Param req_id path string true "ID заявки"
+// @Success      301  {object}  string
 // @Router       /transfer_requests/{req_id} [get]
 func (a *Application) getDetailedRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
@@ -373,11 +375,12 @@ func (a *Application) getRequestsByStatus(c *gin.Context) {
 // Оба метода почти идентичны -> сделать один большой = лучше?
 // @Summary      Изменение статуса заявки на трансфер (для модератора)
 // @Description  Изменяет статус заявки на трансфер на любой из доступных для модератора
-// @Tags         transfer requests
+// @Tags         Заявки на трансфер
 // @Accept json
 // @Produce      json
 // @Success      201  {object}  string
-// @Router /transfer-requests/{transferID}/moder_change_status [put]
+// @Param request body ds.ChangeTransferStatusRequestBody true "Данные о заявке"
+// @Router /transfer_requests/{transferID}/moder_change_status [put]
 func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -427,11 +430,12 @@ func (a *Application) moderChangeTransferRequestStatus(c *gin.Context) {
 // надо ли делать проверку является ли пользователь клиентом?
 // @Summary      Изменение статуса заявки на трансфер (для клиента)
 // @Description  Изменяет статус заявки на трансфер на любой из доступных для клиента
-// @Tags         transfer requests
+// @Tags         Заявки на трансфер
 // @Accept json
 // @Produce      json
+// @Param request body ds.ChangeTransferStatusRequestBody true "Данные о заявке"
 // @Success      201  {object}  string
-// @Router /transfer-requests/{transferID}/client_change_status [put]
+// @Router /transfer_requests/{transferID}/client_change_status [put]
 func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -480,10 +484,10 @@ func (a *Application) clientChangeTransferRequestStatus(c *gin.Context) {
 
 // @Summary      Логическое удаление заявки на трансфер
 // @Description  Изменяет статус заявки на трансфер на "Удалена"
-// @Tags         transfer requests
-// @Accept json
+// @Tags         Заявки на трансфер
 // @Produce      json
 // @Success      302  {object}  string
+// @Param req_id path string true "ID заявки"
 // @Router /transfer_requests/{req_id}/delete [post]
 func (a *Application) deleteTransferRequest(c *gin.Context) {
 	req_id, err1 := strconv.Atoi(c.Param("req_id"))
@@ -533,6 +537,14 @@ func (a *Application) ping(c *gin.Context) {
 	})
 }
 
+// @Summary Зарегистрировать нового пользователя
+// @Description Добавляет в БД нового пользователя
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {object} registerResp
+// @Param request_body body registerReq true "Данные для регистрации"
+// @Router /register [post]
 func (a *Application) register(c *gin.Context) {
 	req := &registerReq{}
 
@@ -568,6 +580,14 @@ func (a *Application) register(c *gin.Context) {
 	})
 }
 
+// @Summary Вход в систему
+// @Description Проверяет данные для входа и в случае успеха возвращает токен для входа
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {object} loginResp
+// @Param request_body body loginReq true "Данные для входа"
+// @Router /login [post]
 func (a *Application) login(c *gin.Context) {
 	cfg := a.config
 	req := &loginReq{}
@@ -620,7 +640,7 @@ func (a *Application) login(c *gin.Context) {
 			Role:        user.Role,
 			AccessToken: strToken,
 			TokenType:   "Bearer",
-			ExpiresIn:   cfg.JWT.ExpiresIn,
+			ExpiresIn:   int(cfg.JWT.ExpiresIn.Seconds()),
 		})
 
 		c.AbortWithStatus(http.StatusOK)
@@ -629,6 +649,13 @@ func (a *Application) login(c *gin.Context) {
 	}
 }
 
+// @Summary Выйти из системы
+// @Details Деактивирует текущий токен пользователя, добавляя его в блэклист в редисе
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200
+// @Router /logout [post]
 func (a *Application) logout(c *gin.Context) {
 	// получаем заголовок
 
