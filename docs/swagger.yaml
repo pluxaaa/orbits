@@ -1,4 +1,80 @@
 basePath: /
+definitions:
+  app.jsonMap:
+    additionalProperties:
+      type: string
+    type: object
+  app.loginReq:
+    properties:
+      login:
+        type: string
+      password:
+        type: string
+    type: object
+  app.loginResp:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      role:
+        $ref: '#/definitions/role.Role'
+      token_type:
+        type: string
+      username:
+        type: string
+    type: object
+  app.registerReq:
+    properties:
+      name:
+        description: лучше назвать то же самое что login
+        type: string
+      pass:
+        type: string
+    type: object
+  app.registerResp:
+    properties:
+      ok:
+        type: boolean
+    type: object
+  ds.ChangeTransferStatusRequestBody:
+    properties:
+      status:
+        type: string
+      transferID:
+        type: integer
+      userName:
+        type: string
+    type: object
+  ds.Orbit:
+    properties:
+      apogee:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      imageURL:
+        type: string
+      inclination:
+        type: string
+      isAvailable:
+        type: boolean
+      name:
+        type: string
+      perigee:
+        type: string
+    type: object
+  role.Role:
+    enum:
+    - 0
+    - 1
+    - 2
+    type: integer
+    x-enum-varnames:
+    - Guest
+    - Client
+    - Moderator
 host: localhost:8000
 info:
   contact: {}
@@ -6,6 +82,41 @@ info:
   title: orbits
   version: 0.0-0
 paths:
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Проверяет данные для входа и в случае успеха возвращает токен для
+        входа
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: request_body
+        required: true
+        schema:
+          $ref: '#/definitions/app.loginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/app.loginResp'
+      summary: Вход в систему
+      tags:
+      - Аутентификация
+  /logout:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Выйти из системы
+      tags:
+      - Аутентификация
   /orbits:
     get:
       consumes:
@@ -25,8 +136,8 @@ paths:
             type: ""
       summary: Получение всех орбит со статусом "Доступна"
       tags:
-      - orbits
-  /orbits/{orbit}:
+      - Орбиты
+  /orbits/{orbit_name}:
     get:
       description: Возвращает подробную информацию об орбите по ее названию
       parameters:
@@ -44,28 +155,20 @@ paths:
             type: string
       summary: Получение детализированной информации об орбите
       tags:
-      - orbits
-  /orbits/{orbit}/edit:
-    put:
-      consumes:
-      - application/json
-      description: Обновляет данные об орбите, основываясь на полях из JSON
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Изменение орбиты
-      tags:
-      - orbits
-  /orbits/add:
+      - Орбиты
+  /orbits/{orbit_name}/add:
     post:
       consumes:
       - application/json
       description: Создает заявку на трансфер в статусе (или добавляет в открытую)
         и добавляет выбранную орбиту
+      parameters:
+      - description: Данные заказа
+        in: body
+        name: Body
+        required: true
+        schema:
+          $ref: '#/definitions/app.jsonMap'
       produces:
       - application/json
       responses:
@@ -75,12 +178,40 @@ paths:
             type: string
       summary: Добавление орбиты в заявку на трансфер
       tags:
-      - general
+      - Общее
+  /orbits/{orbit_name}/edit:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет данные об орбите, основываясь на полях из JSON
+      parameters:
+      - description: Орбита
+        in: body
+        name: orbit
+        schema:
+          $ref: '#/definitions/ds.Orbit'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Изменение орбиты
+      tags:
+      - Орбиты
   /orbits/new_orbit:
     post:
       consumes:
       - application/json
       description: Добавляет орбиту с полями, указанныим в JSON
+      parameters:
+      - description: Данные новой орбиты
+        in: body
+        name: orbit
+        required: true
+        schema:
+          $ref: '#/definitions/ds.Orbit'
       produces:
       - application/json
       responses:
@@ -90,37 +221,29 @@ paths:
             type: string
       summary: Добавление новой орбиты
       tags:
-      - orbits
-  /transfer-requests/{transferID}/client_change_status:
-    put:
+      - Орбиты
+  /register:
+    post:
       consumes:
       - application/json
-      description: Изменяет статус заявки на трансфер на любой из доступных для клиента
+      description: Добавляет в БД нового пользователя
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request_body
+        required: true
+        schema:
+          $ref: '#/definitions/app.registerReq'
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "200":
+          description: OK
           schema:
-            type: string
-      summary: Изменение статуса заявки на трансфер (для клиента)
+            $ref: '#/definitions/app.registerResp'
+      summary: Зарегистрировать нового пользователя
       tags:
-      - transfer requests
-  /transfer-requests/{transferID}/moder_change_status:
-    put:
-      consumes:
-      - application/json
-      description: Изменяет статус заявки на трансфер на любой из доступных для модератора
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            type: string
-      summary: Изменение статуса заявки на трансфер (для модератора)
-      tags:
-      - transfer requests
+      - Аутентификация
   /transfer_requests:
     get:
       description: Получает все заявки на трансфер
@@ -133,25 +256,35 @@ paths:
             type: string
       summary: Получение всех заявок на трансфер
       tags:
-      - transfer requests
+      - Заявки на трансфер
   /transfer_requests/{req_id}:
     get:
       description: Получает подробную информаицю о заявке на трансфер
+      parameters:
+      - description: ID заявки
+        in: path
+        name: req_id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
-        "302":
-          description: Found
+        "301":
+          description: Moved Permanently
           schema:
             type: string
       summary: Получение детализированной заявки на трансфер
       tags:
-      - transfer requests
+      - Заявки на трансфер
   /transfer_requests/{req_id}/delete:
     post:
-      consumes:
-      - application/json
       description: Изменяет статус заявки на трансфер на "Удалена"
+      parameters:
+      - description: ID заявки
+        in: path
+        name: req_id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -161,7 +294,51 @@ paths:
             type: string
       summary: Логическое удаление заявки на трансфер
       tags:
-      - transfer requests
+      - Заявки на трансфер
+  /transfer_requests/{transferID}/client_change_status:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет статус заявки на трансфер на любой из доступных для клиента
+      parameters:
+      - description: Данные о заявке
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ds.ChangeTransferStatusRequestBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Изменение статуса заявки на трансфер (для клиента)
+      tags:
+      - Заявки на трансфер
+  /transfer_requests/{transferID}/moder_change_status:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет статус заявки на трансфер на любой из доступных для модератора
+      parameters:
+      - description: Данные о заявке
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ds.ChangeTransferStatusRequestBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Изменение статуса заявки на трансфер (для модератора)
+      tags:
+      - Заявки на трансфер
 schemes:
 - http
 swagger: "2.0"

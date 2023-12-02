@@ -15,6 +15,59 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/login": {
+            "post": {
+                "description": "Проверяет данные для входа и в случае успеха возвращает токен для входа",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Вход в систему",
+                "parameters": [
+                    {
+                        "description": "Данные для входа",
+                        "name": "request_body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.loginReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/app.loginResp"
+                        }
+                    }
+                }
+            }
+        },
+        "/logout": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Выйти из системы",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/orbits": {
             "get": {
                 "description": "Возвращает всех доступные орбиты",
@@ -25,7 +78,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "orbits"
+                    "Орбиты"
                 ],
                 "summary": "Получение всех орбит со статусом \"Доступна\"",
                 "parameters": [
@@ -46,29 +99,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/orbits/add": {
-            "post": {
-                "description": "Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "general"
-                ],
-                "summary": "Добавление орбиты в заявку на трансфер",
-                "responses": {
-                    "302": {
-                        "description": "Found",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/orbits/new_orbit": {
             "post": {
                 "description": "Добавляет орбиту с полями, указанныим в JSON",
@@ -79,9 +109,20 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "orbits"
+                    "Орбиты"
                 ],
                 "summary": "Добавление новой орбиты",
+                "parameters": [
+                    {
+                        "description": "Данные новой орбиты",
+                        "name": "orbit",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.Orbit"
+                        }
+                    }
+                ],
                 "responses": {
                     "201": {
                         "description": "Created",
@@ -92,14 +133,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/orbits/{orbit}": {
+        "/orbits/{orbit_name}": {
             "get": {
                 "description": "Возвращает подробную информацию об орбите по ее названию",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "orbits"
+                    "Орбиты"
                 ],
                 "summary": "Получение детализированной информации об орбите",
                 "parameters": [
@@ -121,7 +162,41 @@ const docTemplate = `{
                 }
             }
         },
-        "/orbits/{orbit}/edit": {
+        "/orbits/{orbit_name}/add": {
+            "post": {
+                "description": "Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Общее"
+                ],
+                "summary": "Добавление орбиты в заявку на трансфер",
+                "parameters": [
+                    {
+                        "description": "Данные заказа",
+                        "name": "Body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.jsonMap"
+                        }
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/{orbit_name}/edit": {
             "put": {
                 "description": "Обновляет данные об орбите, основываясь на полях из JSON",
                 "consumes": [
@@ -131,60 +206,58 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "orbits"
+                    "Орбиты"
                 ],
                 "summary": "Изменение орбиты",
+                "parameters": [
+                    {
+                        "description": "Орбита",
+                        "name": "orbit",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/ds.Orbit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/register": {
+            "post": {
+                "description": "Добавляет в БД нового пользователя",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Зарегистрировать нового пользователя",
+                "parameters": [
+                    {
+                        "description": "Данные для регистрации",
+                        "name": "request_body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.registerReq"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/transfer-requests/{transferID}/client_change_status": {
-            "put": {
-                "description": "Изменяет статус заявки на трансфер на любой из доступных для клиента",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "transfer requests"
-                ],
-                "summary": "Изменение статуса заявки на трансфер (для клиента)",
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/transfer-requests/{transferID}/moder_change_status": {
-            "put": {
-                "description": "Изменяет статус заявки на трансфер на любой из доступных для модератора",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "transfer requests"
-                ],
-                "summary": "Изменение статуса заявки на трансфер (для модератора)",
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/app.registerResp"
                         }
                     }
                 }
@@ -197,7 +270,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "transfer requests"
+                    "Заявки на трансфер"
                 ],
                 "summary": "Получение всех заявок на трансфер",
                 "responses": {
@@ -217,12 +290,21 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "transfer requests"
+                    "Заявки на трансфер"
                 ],
                 "summary": "Получение детализированной заявки на трансфер",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID заявки",
+                        "name": "req_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
-                    "302": {
-                        "description": "Found",
+                    "301": {
+                        "description": "Moved Permanently",
                         "schema": {
                             "type": "string"
                         }
@@ -233,16 +315,22 @@ const docTemplate = `{
         "/transfer_requests/{req_id}/delete": {
             "post": {
                 "description": "Изменяет статус заявки на трансфер на \"Удалена\"",
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "transfer requests"
+                    "Заявки на трансфер"
                 ],
                 "summary": "Логическое удаление заявки на трансфер",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID заявки",
+                        "name": "req_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "302": {
                         "description": "Found",
@@ -252,6 +340,189 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/transfer_requests/{transferID}/client_change_status": {
+            "put": {
+                "description": "Изменяет статус заявки на трансфер на любой из доступных для клиента",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Заявки на трансфер"
+                ],
+                "summary": "Изменение статуса заявки на трансфер (для клиента)",
+                "parameters": [
+                    {
+                        "description": "Данные о заявке",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.ChangeTransferStatusRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer_requests/{transferID}/moder_change_status": {
+            "put": {
+                "description": "Изменяет статус заявки на трансфер на любой из доступных для модератора",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Заявки на трансфер"
+                ],
+                "summary": "Изменение статуса заявки на трансфер (для модератора)",
+                "parameters": [
+                    {
+                        "description": "Данные о заявке",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.ChangeTransferStatusRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "app.jsonMap": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "app.loginReq": {
+            "type": "object",
+            "properties": {
+                "login": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.loginResp": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "role": {
+                    "$ref": "#/definitions/role.Role"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.registerReq": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "лучше назвать то же самое что login",
+                    "type": "string"
+                },
+                "pass": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.registerResp": {
+            "type": "object",
+            "properties": {
+                "ok": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "ds.ChangeTransferStatusRequestBody": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                },
+                "transferID": {
+                    "type": "integer"
+                },
+                "userName": {
+                    "type": "string"
+                }
+            }
+        },
+        "ds.Orbit": {
+            "type": "object",
+            "properties": {
+                "apogee": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "imageURL": {
+                    "type": "string"
+                },
+                "inclination": {
+                    "type": "string"
+                },
+                "isAvailable": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "perigee": {
+                    "type": "string"
+                }
+            }
+        },
+        "role.Role": {
+            "type": "integer",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "Guest",
+                "Client",
+                "Moderator"
+            ]
         }
     }
 }`
