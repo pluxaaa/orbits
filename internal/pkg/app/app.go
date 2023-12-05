@@ -36,7 +36,7 @@ type Application struct {
 }
 
 type loginReq struct {
-	Login    string `json:"login"`
+	Login    string `json:"username"`
 	Password string `json:"password"`
 }
 
@@ -91,39 +91,35 @@ func (a *Application) StartServer() {
 	a.r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	a.r.POST("/login", a.login)
-	a.r.POST("/sign_up", a.register)
+	a.r.POST("/register", a.register)
 	a.r.POST("/logout", a.logout)
 
-	a.r.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
+	a.r.GET("/orbits", a.getAllOrbits)
+	a.r.GET("/orbits/:orbit_name", a.getDetailedOrbit)
 
-	orbitGroup := a.r.Group("/orbits")
+	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
-		orbitGroup.GET("", a.getAllOrbits)
-		orbitGroup.GET("/:orbit_name", a.getDetailedOrbit)
-
-		orbitGroup.Use(a.WithAuthCheck(role.Moderator))
-		{
-			orbitGroup.PUT("/:orbit_name/edit", a.editOrbit)
-			orbitGroup.POST("/new_orbit", a.newOrbit)
-			orbitGroup.POST("/:orbit_name/add", a.addOrbitToRequest)
-			orbitGroup.DELETE("/change_status/:orbit_name", a.changeOrbitStatus)
-		}
+		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
+		clientMethods.PUT("/transfer_requests/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
+		clientMethods.POST("/transfer_requests/:req_id/delete", a.deleteTransferRequest)
+		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
 
-	transferReqGroup := a.r.Group("/transfer_requests")
+	moderMethods := a.r.Group("", a.WithAuthCheck(role.Moderator))
 	{
-		transferReqGroup.Use(a.WithAuthCheck(role.Moderator, role.Client))
-		{
-			transferReqGroup.GET("/", a.getAllRequests)
-			transferReqGroup.GET("/:req_id", a.getDetailedRequest)
-			transferReqGroup.GET("/status/:status", a.getRequestsByStatus)
-			transferReqGroup.PUT("/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
-			transferReqGroup.PUT("/:req_id/client_change_status", a.clientChangeTransferRequestStatus)
-			transferReqGroup.POST("/:req_id/delete", a.deleteTransferRequest)
-		}
+		moderMethods.PUT("/orbits/:orbit_name/edit", a.editOrbit)
+		moderMethods.POST("/orbits/new_orbit", a.newOrbit)
+		moderMethods.DELETE("/orbits/change_status/:orbit_name", a.changeOrbitStatus)
+		moderMethods.PUT("/transfer_requests/:req_id/moder_change_status", a.moderChangeTransferRequestStatus)
+		moderMethods.GET("/ping", a.ping)
 	}
 
-	a.r.GET("/ping", a.ping)
+	authorizedMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator))
+	{
+		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
+		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
+		authorizedMethods.GET("/transfer_requests/status/:status", a.getRequestsByStatus)
+	}
 
 	a.r.Run(":8000")
 
@@ -591,13 +587,13 @@ func (a *Application) register(c *gin.Context) {
 func (a *Application) login(c *gin.Context) {
 	cfg := a.config
 	req := &loginReq{}
-
 	err := json.NewDecoder(c.Request.Body).Decode(req)
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 
 		return
 	}
+	//log.Println("---JSON--- ", req.Login, " --- ", req.Password)
 
 	user, err := a.repo.GetUserByName(req.Login)
 	if err != nil {
@@ -633,7 +629,9 @@ func (a *Application) login(c *gin.Context) {
 			return
 		}
 
-		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Second*3600).Unix()), "", "", true, true)
+		//httpOnly=true, secure=true -> не могу читать куки на фронте ...
+		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Second*3600).
+			Unix()), "", "", false, false)
 
 		c.JSON(http.StatusOK, loginResp{
 			Username:    user.Name,
@@ -642,7 +640,7 @@ func (a *Application) login(c *gin.Context) {
 			TokenType:   "Bearer",
 			ExpiresIn:   int(cfg.JWT.ExpiresIn.Seconds()),
 		})
-
+		log.Println("\nUSER: ", user.Name, "\n", strToken, "\n")
 		c.AbortWithStatus(http.StatusOK)
 	} else {
 		c.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
@@ -658,7 +656,6 @@ func (a *Application) login(c *gin.Context) {
 // @Router /logout [post]
 func (a *Application) logout(c *gin.Context) {
 	// получаем заголовок
-
 	jwtStr, err := GetJWTToken(c)
 	if err != nil {
 		panic(err)

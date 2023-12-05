@@ -16,17 +16,19 @@ const jwtPrefix = "Bearer "
 
 func GetJWTToken(gCtx *gin.Context) (string, error) {
 	jwtStr := gCtx.GetHeader("Authorization")
+	//log.Println("\nJWT before cookie: ", jwtStr)
 
 	if jwtStr == "" {
-		log.Println("getting JWT from cookie")
+		log.Println("\ngetting JWT from cookie")
 		var cookieErr error
 		jwtStr, cookieErr = gCtx.Cookie("orbits-api-token")
+		//log.Println("\nJWT after cookie: ", jwtStr)
 		if cookieErr != nil {
 			gCtx.AbortWithStatus(http.StatusBadRequest)
 			return "", cookieErr
 		}
 	}
-
+	//log.Println("\nfin JWT: ", jwtStr)
 	return jwtStr, nil
 }
 
@@ -50,7 +52,6 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 		if err != nil {
 			panic(err)
 		}
-
 		if !strings.HasPrefix(jwtStr, jwtPrefix) {
 			c.AbortWithStatus(http.StatusForbidden)
 
@@ -79,7 +80,8 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 
 		isAssigned := false
 
-		for _, oneOfAssignedRole := range assignedRoles {
+		for q, oneOfAssignedRole := range assignedRoles {
+			log.Println(q, "   ", oneOfAssignedRole)
 			if myClaims.Role == oneOfAssignedRole {
 				isAssigned = true
 				break

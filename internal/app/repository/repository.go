@@ -94,6 +94,7 @@ func (r *Repository) GetAllOrbits(orbitName, orbitIncl, isCircle string) ([]ds.O
 			qry = qry.Where("apogee != perigee")
 		}
 	}
+	qry = qry.Where("is_available = ?", true)
 
 	err := qry.Order("name").Find(&orbits).Error
 
