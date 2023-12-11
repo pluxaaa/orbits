@@ -8,7 +8,7 @@ import (
 
 type User struct {
 	UUID uuid.UUID `gorm:"type:uuid;unique"`
-	Name string    `json:"name"`
+	Name string    `json:"Name"`
 	Role role.Role `sql:"type:string;"`
 	Pass string
 }
@@ -24,10 +24,11 @@ type User struct {
 
 var ReqStatuses = []string{
 	"Черновик",
+	"На рассмотрении",
 	"Удалена",
 	"Отклонена",
 	"Оказана",
-	"На рассмотрении"}
+}
 
 type TransferRequest struct {
 	ID            uint       `gorm:"primaryKey;AUTO_INCREMENT"`
@@ -65,5 +66,4 @@ type TransferToOrbit struct {
 type ChangeTransferStatusRequestBody struct {
 	TransferID uint
 	Status     string
-	UserName   string
 }

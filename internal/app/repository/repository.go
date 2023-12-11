@@ -240,9 +240,9 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin string) ([]
 	}
 
 	if userRole == role.Moderator {
-		qry = qry.Where("status = ?", ds.ReqStatuses[4])
+		qry = qry.Where("status = ?", ds.ReqStatuses[1])
 	} else {
-		qry = qry.Where("status IN ?", ds.ReqStatuses[:2])
+		qry = qry.Where("status IN ?", ds.ReqStatuses)
 	}
 
 	err := qry.
@@ -253,6 +253,7 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin string) ([]
 	if err != nil {
 		return nil, err
 	}
+	log.Println(requests)
 
 	return requests, nil
 }
@@ -296,14 +297,9 @@ func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequ
 	return request, nil
 }
 
-func (r *Repository) CreateTransferRequest(client_name string) (*ds.TransferRequest, error) {
+func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferRequest, error) {
 	//проверка есть ли открытая заявка у клиента
-	user, err := r.GetUserByName(client_name)
-	if err != nil {
-		return nil, err
-	}
-
-	request, err := r.GetCurrentRequest(user.UUID)
+	request, err := r.GetCurrentRequest(client_id)
 	if err != nil {
 		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
 
@@ -318,12 +314,12 @@ func (r *Repository) CreateTransferRequest(client_name string) (*ds.TransferRequ
 		log.Println("moder: ", moder_refer)
 
 		//поля типа Users, связанные с передавыемыми значениями из функции
-		client := ds.User{UUID: user.UUID}
+		client := ds.User{UUID: client_id}
 		moder := ds.User{UUID: moder_refer}
 
 		NewTransferRequest := &ds.TransferRequest{
 			ID:            uint(len([]ds.TransferRequest{})),
-			ClientRefer:   user.UUID,
+			ClientRefer:   client_id,
 			Client:        client,
 			ModerRefer:    moder_refer,
 			Moder:         moder,
@@ -338,14 +334,14 @@ func (r *Repository) CreateTransferRequest(client_name string) (*ds.TransferRequ
 }
 
 func (r *Repository) ChangeRequestStatus(id uint, status string) error {
-	if slices.Contains(ds.ReqStatuses[1:4], status) {
+	if slices.Contains(ds.ReqStatuses[2:4], status) {
 		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_finished", time.Now()).Error
 		if err != nil {
 			return err
 		}
 	}
 
-	if status == ds.ReqStatuses[4] {
+	if status == ds.ReqStatuses[1] {
 		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_processed", time.Now()).Error
 		if err != nil {
 			return err

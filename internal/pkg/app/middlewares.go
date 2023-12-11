@@ -60,13 +60,20 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 
 		jwtStr = jwtStr[len(jwtPrefix):]
 
+		asd, err := GetUserClaims(jwtStr, c, a)
+		if err != nil {
+			panic(err)
+			return
+		}
+		log.Println(jwtStr)
+		log.Println(asd.Role)
+
 		err = a.redis.CheckJWTInBlackList(c.Request.Context(), jwtStr)
 		if err == nil { // значит что токен в блеклисте
 			c.AbortWithStatus(http.StatusForbidden)
 
 			return
 		}
-
 		if !errors.Is(err, redis.Nil) { // значит что это не ошибка отсуствия - внутренняя ошибка
 			c.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -97,7 +104,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 		log.Println("AssignedRoles: ", assignedRoles, "\n",
 			"UserRoles: ", myClaims.Role)
 
-		c.Set("role", myClaims.Role)
+		c.Set("userRole", myClaims.Role)
 		c.Set("userUUID", myClaims.UserUUID)
 	}
 
