@@ -64,6 +64,10 @@ type TransferToOrbit struct {
 // JSON PARSER
 
 type ChangeTransferStatusRequestBody struct {
-	TransferID uint
-	Status     string
+	TransferID uint   `json:"reqID"`
+	Status     string `json:"status"`
+}
+
+type CreateTransferRequestBody struct {
+	Orbits []string
 }

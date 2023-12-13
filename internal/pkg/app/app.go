@@ -97,7 +97,11 @@ func (a *Application) StartServer() {
 
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
+		//старое создание заявки + добавление в м-м (не используется скорее всего)
 		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
+
+		//новое создание заявки + добавление в м-м
+		clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
 		clientMethods.POST("/transfer_requests/:req_id/delete", a.deleteTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
@@ -115,6 +119,7 @@ func (a *Application) StartServer() {
 		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
 		authorizedMethods.GET("/transfer_requests/status/:status", a.getRequestsByStatus)
+		authorizedMethods.GET("/transfer_to_orbit/:req_id", a.getOrbitsFromTransfer)
 		authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
 	}
 
@@ -293,6 +298,33 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	}
 }
 
+func (a *Application) createTransferRequest(c *gin.Context) {
+	var request_body ds.CreateTransferRequestBody
+
+	if err := c.BindJSON(&request_body); err != nil {
+		c.String(http.StatusBadGateway, "Не могу распознать json")
+		return
+	}
+
+	_userUUID, ok := c.Get("userUUID")
+
+	if !ok {
+		c.String(http.StatusInternalServerError, "Вы сначала должны залогиниться")
+		return
+	}
+
+	userUUID := _userUUID.(uuid.UUID)
+	err := a.repo.CreateTransferRequestNEW(request_body, userUUID)
+
+	if err != nil {
+		c.Error(err)
+		c.String(http.StatusNotFound, "Не могу добавить орбиту")
+		return
+	}
+
+	c.String(http.StatusCreated, "Заявка создана")
+}
+
 // @Summary      Получение всех заявок на трансфер
 // @Description  Получает все заявки на трансфер
 // @Tags         Заявки на трансфер
@@ -332,17 +364,26 @@ func (a *Application) getAllRequests(c *gin.Context) {
 func (a *Application) getDetailedRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
-		// ... handle error
+		log.Println("REQ ID: ", req_id)
 		panic(err)
 	}
 
-	requests, err := a.repo.GetRequestByID(uint(req_id))
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		panic(exists)
+	}
+	userRole, exists := c.Get("userRole")
+	if !exists {
+		panic(exists)
+	}
+
+	request, err := a.repo.GetRequestByID(uint(req_id), userUUID.(uuid.UUID), userRole)
 	if err != nil {
-		c.Error(err)
+		c.AbortWithError(http.StatusForbidden, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, requests)
+	c.JSON(http.StatusOK, request)
 }
 
 // надо??
@@ -375,9 +416,9 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 		panic(exists)
 	}
 
-	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID)
+	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
 	if err != nil {
-		c.Error(err)
+		c.AbortWithError(http.StatusForbidden, err)
 		return
 	}
 
@@ -453,6 +494,24 @@ func (a *Application) deleteTransferRequest(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, "TransferRequest & TransferToOrbit were deleted")
+}
+
+func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно добавить проверку на авторизацию пользователя
+	req_id, err := strconv.Atoi(c.Param("req_id"))
+	if err != nil {
+		c.String(http.StatusBadRequest, "Ошибка в ID заявки")
+		return
+	}
+
+	orbits, err := a.repo.GetOrbitsFromTransfer(req_id)
+	log.Println(orbits)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Ошибка при получении орбит из заявки")
+		return
+	}
+
+	c.JSON(http.StatusOK, orbits)
+
 }
 
 // удаление записи (одной) из м-м по двум айди
