@@ -97,11 +97,15 @@ func (a *Application) StartServer() {
 
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
-		//старое создание заявки + добавление в м-м (не используется скорее всего)
-		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
+		//старое создание заявки + добавление в м-м (не используется скорее всего) -> удалить?
+		//clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
 
-		//новое создание заявки + добавление в м-м
+		//актуальное создание заявки + добавление в м-м
 		clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
+
+		//актуальное обновление записей в м-м
+		clientMethods.PUT("/transfer_requests/set_orbits", a.setRequestOrbits)
+
 		clientMethods.POST("/transfer_requests/:req_id/delete", a.deleteTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
@@ -179,7 +183,7 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 }
 
-// фактическ - удаление услуги (status=false, не выводится)
+// фактически - удаление услуги (status=false, не выводится)
 func (a *Application) changeOrbitStatus(c *gin.Context) {
 	orbitName := c.Param("orbit_name")
 
@@ -269,34 +273,36 @@ func (a *Application) editOrbit(c *gin.Context) {
 // @Success      200  {object}  string
 // @Param Body body jsonMap true "Данные заказа"
 // @Router       /orbits/{orbit_name}/add [post]
-func (a *Application) addOrbitToRequest(c *gin.Context) {
-	orbit_name := c.Param("orbit_name")
-
-	// Получение инфы об орбите -> orbit.ID
-	orbit, err := a.repo.GetOrbitByName(orbit_name)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	userUUID, exists := c.Get("userUUID")
-	if !exists {
-		panic(exists)
-	}
-
-	request := &ds.TransferRequest{}
-	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-}
+// удалить?
+// удалить?
+//func (a *Application) addOrbitToRequest(c *gin.Context) {
+//	orbit_name := c.Param("orbit_name")
+//
+//	// Получение инфы об орбите -> orbit.ID
+//	orbit, err := a.repo.GetOrbitByName(orbit_name)
+//	if err != nil {
+//		c.Error(err)
+//		return
+//	}
+//
+//	userUUID, exists := c.Get("userUUID")
+//	if !exists {
+//		panic(exists)
+//	}
+//
+//	request := &ds.TransferRequest{}
+//	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
+//	if err != nil {
+//		c.Error(err)
+//		return
+//	}
+//
+//	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
+//	if err != nil {
+//		c.Error(err)
+//		return
+//	}
+//}
 
 func (a *Application) createTransferRequest(c *gin.Context) {
 	var request_body ds.CreateTransferRequestBody
@@ -314,7 +320,7 @@ func (a *Application) createTransferRequest(c *gin.Context) {
 	}
 
 	userUUID := _userUUID.(uuid.UUID)
-	err := a.repo.CreateTransferRequestNEW(request_body, userUUID)
+	err := a.repo.CreateTransferRequest(request_body, userUUID)
 
 	if err != nil {
 		c.Error(err)
@@ -323,6 +329,23 @@ func (a *Application) createTransferRequest(c *gin.Context) {
 	}
 
 	c.String(http.StatusCreated, "Заявка создана")
+}
+
+func (a *Application) setRequestOrbits(c *gin.Context) {
+	var requestBody ds.SetRequestOrbitsRequestBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.String(http.StatusBadRequest, "Не получается распознать json запрос")
+		return
+	}
+
+	err := a.repo.SetRequestOrbits(requestBody.RequestID, requestBody.Orbits)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Не получилось задать регионы для заявки\n"+err.Error())
+	}
+
+	c.String(http.StatusCreated, "Регионы заявки успешно заданы!")
+
 }
 
 // @Summary      Получение всех заявок на трансфер
@@ -406,6 +429,7 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+	log.Println(requestBody)
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
@@ -415,12 +439,13 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 	if !exists {
 		panic(exists)
 	}
-
+	log.Println("ok: ", userRole, userUUID)
 	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
 	if err != nil {
 		c.AbortWithError(http.StatusForbidden, err)
 		return
 	}
+	log.Println("ok curr")
 
 	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
 		c.String(http.StatusBadRequest, "Неверный статус")

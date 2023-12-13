@@ -71,3 +71,8 @@ type ChangeTransferStatusRequestBody struct {
 type CreateTransferRequestBody struct {
 	Orbits []string
 }
+
+type SetRequestOrbitsRequestBody struct {
+	RequestID int
+	Orbits    []string
+}
