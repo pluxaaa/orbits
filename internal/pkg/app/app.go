@@ -148,7 +148,8 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 	allOrbits, err := a.repo.GetAllOrbits(orbitName, orbitIncl, isCircle)
 
 	if err != nil {
-		c.Error(err)
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
 	}
 
 	c.JSON(http.StatusOK, allOrbits)
@@ -167,7 +168,7 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
-		c.Error(err)
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -404,7 +405,7 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 
 	request, err := a.repo.GetRequestByID(uint(req_id), userUUID.(uuid.UUID), userRole)
 	if err != nil {
-		c.AbortWithError(http.StatusForbidden, err)
+		c.JSON(http.StatusForbidden, err)
 		return
 	}
 

@@ -102,7 +102,7 @@ func (r *Repository) GetAllOrbits(orbitName, orbitIncl, isCircle string) ([]ds.O
 		return nil, err
 	}
 
-	return orbits, nil
+	return orbits, err
 }
 
 // логическое "удаление" орбиты (SQL)
