@@ -226,7 +226,7 @@ func extractObjectNameFromURL(imageURL string) string {
 // --------------------------- TRANSFER_REQUESTS METHODS ---------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin string) ([]ds.TransferRequest, error) {
+func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status string) ([]ds.TransferRequest, error) {
 
 	requests := []ds.TransferRequest{}
 	qry := r.db
@@ -237,6 +237,10 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin string) ([]
 		qry = qry.Where("date_processed >= ?", dateStart)
 	} else if dateFin != "" {
 		qry = qry.Where("date_processed <= ?", dateFin)
+	}
+
+	if status != "" {
+		qry = qry.Where("status = ?", status)
 	}
 
 	if userRole == role.Moderator {
@@ -342,13 +346,13 @@ func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequ
 //}
 
 // новое создание заявки
-func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestBody, userUUID uuid.UUID) error {
+func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestBody, userUUID uuid.UUID) (int, error) {
 	var orbit_ids []int
 	var orbit_names []string
 	for _, orbitName := range requestBody.Orbits {
 		orbit, err := r.GetOrbitByName(orbitName)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		orbit_ids = append(orbit_ids, int(orbit.ID))
 		orbit_names = append(orbit_names, orbit.Name)
@@ -358,17 +362,17 @@ func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestB
 	if err != nil {
 		log.Println(" --- NEW REQUEST --- ", userUUID)
 
-		//назначение модератора
+		// Назначение модератора
 		moders := []ds.User{}
 		err = r.db.Where("role = ?", 2).Find(&moders).Error
 		if err != nil {
-			return err
+			return 0, err
 		}
 		n := rand.Int() % len(moders)
 		moder_refer := moders[n].UUID
 		log.Println("moder: ", moder_refer)
 
-		//поля типа Users, связанные с передавыемыми значениями из функции
+		// Поля типа Users, связанные с передаваемыми значениями из функции
 		client := ds.User{UUID: userUUID}
 		moder := ds.User{UUID: moder_refer}
 
@@ -386,28 +390,29 @@ func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestB
 
 		err := r.db.Create(request).Error
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	err = r.SetRequestOrbits(int(request.ID), orbit_names)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	//for _, orbit_id := range orbit_ids {
-	//	transfer_to_orbit := ds.TransferToOrbit{}
-	//	transfer_to_orbit.RequestRefer = request.ID
-	//	transfer_to_orbit.OrbitRefer = uint(orbit_id)
-	//	err = r.CreateTransferToOrbit(transfer_to_orbit)
+	// Uncomment the following block if needed
+	// for _, orbit_id := range orbit_ids {
+	// 	transfer_to_orbit := ds.TransferToOrbit{}
+	// 	transfer_to_orbit.RequestRefer = request.ID
+	// 	transfer_to_orbit.OrbitRefer = uint(orbit_id)
+	// 	err = r.CreateTransferToOrbit(transfer_to_orbit)
 	//
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
+	// 	if err != nil {
+	// 		return 0, err
+	// 	}
+	// }
 
-	return nil
-
+	// Return request ID along with nil error
+	return int(request.ID), nil
 }
 
 func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
@@ -476,7 +481,7 @@ func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
 }
 
 func (r *Repository) ChangeRequestStatus(id uint, status string) error {
-	if slices.Contains(ds.ReqStatuses[2:4], status) {
+	if slices.Contains(ds.ReqStatuses[2:5], status) {
 		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_finished", time.Now()).Error
 		if err != nil {
 			return err
@@ -495,7 +500,7 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 		return fmt.Errorf("ошибка обновления статуса: %w", err)
 	}
 
-	if status == ds.ReqStatuses[2] {
+	if status == ds.ReqStatuses[2] || status == ds.ReqStatuses[3] {
 		err = r.DeleteTransferToOrbitEvery(id)
 	}
 

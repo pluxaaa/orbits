@@ -320,7 +320,7 @@ func (a *Application) createTransferRequest(c *gin.Context) {
 	}
 
 	userUUID := _userUUID.(uuid.UUID)
-	err := a.repo.CreateTransferRequest(request_body, userUUID)
+	reqID, err := a.repo.CreateTransferRequest(request_body, userUUID)
 
 	if err != nil {
 		c.Error(err)
@@ -328,7 +328,7 @@ func (a *Application) createTransferRequest(c *gin.Context) {
 		return
 	}
 
-	c.String(http.StatusCreated, "Заявка создана")
+	c.JSON(http.StatusCreated, reqID)
 }
 
 func (a *Application) setRequestOrbits(c *gin.Context) {
@@ -357,6 +357,8 @@ func (a *Application) setRequestOrbits(c *gin.Context) {
 func (a *Application) getAllRequests(c *gin.Context) {
 	dateStart := c.Query("date_start")
 	dateFin := c.Query("date_fin")
+	status := c.Query("status")
+	log.Println(status)
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
@@ -367,7 +369,7 @@ func (a *Application) getAllRequests(c *gin.Context) {
 	//	panic(exists)
 	//}
 
-	requests, err := a.repo.GetAllRequests(userRole, dateStart, dateFin)
+	requests, err := a.repo.GetAllRequests(userRole, dateStart, dateFin, status)
 
 	if err != nil {
 		c.Error(err)
@@ -439,13 +441,12 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 	if !exists {
 		panic(exists)
 	}
-	log.Println("ok: ", userRole, userUUID)
+
 	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
 	if err != nil {
 		c.AbortWithError(http.StatusForbidden, err)
 		return
 	}
-	log.Println("ok curr")
 
 	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
 		c.String(http.StatusBadRequest, "Неверный статус")
@@ -455,6 +456,11 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 	if userRole == role.Client {
 		if currRequest.ClientRefer == userUUID {
 			if slices.Contains(ds.ReqStatuses[:3], requestBody.Status) {
+				if currRequest.Status != ds.ReqStatuses[0] {
+					c.String(http.StatusBadRequest, "Нельзя поменять статус с ", currRequest.Status,
+						" на ", requestBody.Status)
+					return
+				}
 				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
 
 				if err != nil {
