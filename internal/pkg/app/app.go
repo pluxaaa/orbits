@@ -153,7 +153,6 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, allOrbits)
-
 }
 
 // @Summary      Получение детализированной информации об орбите

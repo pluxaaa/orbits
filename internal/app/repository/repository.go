@@ -81,9 +81,9 @@ func (r *Repository) GetAllOrbits(orbitName, orbitIncl, isCircle string) ([]ds.O
 		qry = qry.Where("name ILIKE ?", "%"+orbitName+"%")
 	}
 
-	if orbitIncl != "" {
+	if orbitIncl != "0" && orbitIncl != "" {
 		log.Println("incl")
-		qry = qry.Where("inclination::float > ?", orbitIncl)
+		qry = qry.Where("inclination::float > ?", 0)
 	}
 
 	if isCircle != "" {
