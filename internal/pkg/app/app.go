@@ -97,16 +97,12 @@ func (a *Application) StartServer() {
 
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
-		//старое создание заявки + добавление в м-м (не используется скорее всего) -> удалить?
-		//clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
+		//создание заявки + добавление в м-м (используется на главной странице)
+		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
 
-		//актуальное создание заявки + добавление в м-м
-		clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
-
-		//актуальное обновление записей в м-м
+		//актуальное обновление записей в м-м (используется в корзине и в детальной заявке)
 		clientMethods.PUT("/transfer_requests/set_orbits", a.setRequestOrbits)
 
-		clientMethods.POST("/transfer_requests/:req_id/delete", a.deleteTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
 
@@ -274,61 +270,42 @@ func (a *Application) editOrbit(c *gin.Context) {
 // @Param Body body jsonMap true "Данные заказа"
 // @Router       /orbits/{orbit_name}/add [post]
 // удалить?
-// удалить?
-//func (a *Application) addOrbitToRequest(c *gin.Context) {
-//	orbit_name := c.Param("orbit_name")
-//
-//	// Получение инфы об орбите -> orbit.ID
-//	orbit, err := a.repo.GetOrbitByName(orbit_name)
-//	if err != nil {
-//		c.Error(err)
-//		return
-//	}
-//
-//	userUUID, exists := c.Get("userUUID")
-//	if !exists {
-//		panic(exists)
-//	}
-//
-//	request := &ds.TransferRequest{}
-//	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
-//	if err != nil {
-//		c.Error(err)
-//		return
-//	}
-//
-//	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
-//	if err != nil {
-//		c.Error(err)
-//		return
-//	}
-//}
+func (a *Application) addOrbitToRequest(c *gin.Context) {
+	orbit_name := c.Param("orbit_name")
 
-func (a *Application) createTransferRequest(c *gin.Context) {
-	var request_body ds.CreateTransferRequestBody
-
+	request_body := &ds.TestReqBody{}
 	if err := c.BindJSON(&request_body); err != nil {
 		c.String(http.StatusBadGateway, "Не могу распознать json")
 		return
 	}
+	log.Println(request_body)
 
-	_userUUID, ok := c.Get("userUUID")
-
-	if !ok {
-		c.String(http.StatusInternalServerError, "Вы сначала должны залогиниться")
-		return
-	}
-
-	userUUID := _userUUID.(uuid.UUID)
-	reqID, err := a.repo.CreateTransferRequest(request_body, userUUID)
-
+	// Получение инфы об орбите -> orbit.ID
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
 		c.Error(err)
-		c.String(http.StatusNotFound, "Не могу добавить орбиту")
 		return
 	}
 
-	c.JSON(http.StatusCreated, reqID)
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		panic(exists)
+	}
+
+	request := &ds.TransferRequest{}
+	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, request.ID)
 }
 
 func (a *Application) setRequestOrbits(c *gin.Context) {
@@ -338,13 +315,14 @@ func (a *Application) setRequestOrbits(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Не получается распознать json запрос")
 		return
 	}
+	log.Println("SetOrbits\n", requestBody)
 
 	err := a.repo.SetRequestOrbits(requestBody.RequestID, requestBody.Orbits)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Не получилось задать регионы для заявки\n"+err.Error())
+		c.String(http.StatusInternalServerError, "Не получилось задать орбиту для заявки\n"+err.Error())
 	}
 
-	c.String(http.StatusCreated, "Регионы заявки успешно заданы!")
+	c.String(http.StatusCreated, "Орбиты заявки успешно заданы!")
 
 }
 
@@ -358,7 +336,6 @@ func (a *Application) getAllRequests(c *gin.Context) {
 	dateStart := c.Query("date_start")
 	dateFin := c.Query("date_fin")
 	status := c.Query("status")
-	log.Println(status)
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
@@ -501,32 +478,6 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 	}
 }
 
-// @Summary      Логическое удаление заявки на трансфер
-// @Description  Изменяет статус заявки на трансфер на "Удалена"
-// @Tags         Заявки на трансфер
-// @Produce      json
-// @Success      200  {object}  string
-// @Param req_id path string true "ID заявки"
-// @Router /transfer_requests/{req_id}/delete [post]
-func (a *Application) deleteTransferRequest(c *gin.Context) {
-	req_id, err1 := strconv.Atoi(c.Param("req_id"))
-	if err1 != nil {
-		// ... handle error
-		panic(err1)
-	}
-
-	err1, err2 := a.repo.DeleteTransferRequest(uint(req_id)), a.repo.DeleteTransferToOrbitEvery(uint(req_id))
-
-	if err1 != nil || err2 != nil {
-		c.Error(err1)
-		c.Error(err2)
-		c.String(http.StatusBadRequest, "Bad Request")
-		return
-	}
-
-	c.String(http.StatusOK, "TransferRequest & TransferToOrbit were deleted")
-}
-
 func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно добавить проверку на авторизацию пользователя
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
@@ -535,7 +486,6 @@ func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно до
 	}
 
 	orbits, err := a.repo.GetOrbitsFromTransfer(req_id)
-	log.Println(orbits)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Ошибка при получении орбит из заявки")
 		return
@@ -547,15 +497,19 @@ func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно до
 
 // удаление записи (одной) из м-м по двум айди
 func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
-	var requestBody ds.TransferToOrbit
+	var requestBody ds.TestDelBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
 		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
+	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
 
-	err1, err2 := a.repo.DeleteTransferToOrbitSingle(requestBody.RequestRefer, requestBody.OrbitRefer)
+	err1, err2 := a.repo.DeleteTransferToOrbitSingle(requestBody.Req, int(orbit.ID))
 
 	if err1 != nil || err2 != nil {
 		c.Error(err1)
@@ -592,12 +546,18 @@ func (a *Application) register(c *gin.Context) {
 	}
 
 	if req.Password == "" {
-		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Пароль не задан"})
 		return
 	}
 
 	if req.Login == "" {
-		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Логин не задан"})
+		return
+	}
+
+	exists, err := a.repo.GetUserByName(req.Login)
+	if exists != nil {
+		c.JSON(http.StatusConflict, gin.H{"message": "Пользователь с таким логином уже существует"})
 		return
 	}
 
@@ -605,7 +565,7 @@ func (a *Application) register(c *gin.Context) {
 		UUID: uuid.New(),
 		Role: role.Client,
 		Name: req.Login,
-		Pass: a.repo.GenerateHashString(req.Password), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+		Pass: a.repo.GenerateHashString(req.Password),
 	})
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -631,14 +591,12 @@ func (a *Application) login(c *gin.Context) {
 	err := json.NewDecoder(c.Request.Body).Decode(req)
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
-
 		return
 	}
 
 	user, err := a.repo.GetUserByName(req.Login)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Пользователь не найден"})
 		return
 	}
 
@@ -666,7 +624,6 @@ func (a *Application) login(c *gin.Context) {
 			return
 		}
 
-		//httpOnly=true, secure=true -> не могу читать куки на фронте ...
 		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Second*3600).
 			Unix()), "", "", true, true)
 
@@ -677,10 +634,11 @@ func (a *Application) login(c *gin.Context) {
 			TokenType:   "Bearer",
 			ExpiresIn:   int(cfg.JWT.ExpiresIn.Seconds()),
 		})
-		log.Println("\nUSER: ", user.Name, "\n", strToken, "\n")
+		//log.Println("\nUSER: ", user.Name, "\n", strToken, "\n")
 		c.AbortWithStatus(http.StatusOK)
 	} else {
-		c.AbortWithStatus(http.StatusForbidden)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Неправильный логин или пароль"})
+		return
 	}
 }
 

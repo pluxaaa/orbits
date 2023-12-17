@@ -77,17 +77,14 @@ func (r *Repository) GetAllOrbits(orbitName, orbitIncl, isCircle string) ([]ds.O
 	orbits := []ds.Orbit{}
 	qry := r.db
 	if orbitName != "" {
-		log.Println("orbitName")
 		qry = qry.Where("name ILIKE ?", "%"+orbitName+"%")
 	}
 
 	if orbitIncl != "0" && orbitIncl != "" {
-		log.Println("incl")
 		qry = qry.Where("inclination::float > ?", 0)
 	}
 
 	if isCircle != "" {
-		log.Println("circle")
 		if isCircle == "1" {
 			qry = qry.Where("apogee = perigee")
 		} else {
@@ -240,13 +237,15 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status str
 	}
 
 	if status != "" {
-		qry = qry.Where("status = ?", status)
+		if status == "client" {
+			qry = qry.Where("status NOT IN (?, ?)", "Черновик", "Удалена")
+		} else {
+			qry = qry.Where("status = ?", status)
+		}
 	}
 
 	if userRole == role.Moderator {
 		qry = qry.Where("status = ?", ds.ReqStatuses[1])
-	} else {
-		qry = qry.Where("status IN ?", ds.ReqStatuses)
 	}
 
 	err := qry.
@@ -257,7 +256,6 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status str
 	if err != nil {
 		return nil, err
 	}
-	log.Println(requests)
 
 	return requests, nil
 }
@@ -309,76 +307,29 @@ func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequ
 }
 
 // старое создание заявки -> удалить?
-//func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferRequest, error) {
-//	//проверка есть ли открытая заявка у клиента
-//	request, err := r.GetCurrentRequest(client_id)
-//	if err != nil {
-//		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
-//
-//		//назначение модератора
-//		moders := []ds.User{}
-//		err = r.db.Where("role = ?", 2).Find(&moders).Error
-//		if err != nil {
-//			return nil, err
-//		}
-//		n := rand.Int() % len(moders)
-//		moder_refer := moders[n].UUID
-//		log.Println("moder: ", moder_refer)
-//
-//		//поля типа Users, связанные с передавыемыми значениями из функции
-//		client := ds.User{UUID: client_id}
-//		moder := ds.User{UUID: moder_refer}
-//
-//		NewTransferRequest := &ds.TransferRequest{
-//			ID:            uint(len([]ds.TransferRequest{})),
-//			ClientRefer:   client_id,
-//			Client:        client,
-//			ModerRefer:    moder_refer,
-//			Moder:         moder,
-//			Status:        "Черновик",
-//			DateCreated:   time.Now(),
-//			DateProcessed: nil,
-//			DateFinished:  nil,
-//		}
-//		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
-//	}
-//	return request, nil
-//}
-
-// новое создание заявки
-func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestBody, userUUID uuid.UUID) (int, error) {
-	var orbit_ids []int
-	var orbit_names []string
-	for _, orbitName := range requestBody.Orbits {
-		orbit, err := r.GetOrbitByName(orbitName)
-		if err != nil {
-			return 0, err
-		}
-		orbit_ids = append(orbit_ids, int(orbit.ID))
-		orbit_names = append(orbit_names, orbit.Name)
-	}
-
-	request, err := r.GetCurrentRequest(userUUID)
+func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferRequest, error) {
+	//проверка есть ли открытая заявка у клиента
+	request, err := r.GetCurrentRequest(client_id)
 	if err != nil {
-		log.Println(" --- NEW REQUEST --- ", userUUID)
+		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
 
-		// Назначение модератора
+		//назначение модератора
 		moders := []ds.User{}
 		err = r.db.Where("role = ?", 2).Find(&moders).Error
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		n := rand.Int() % len(moders)
 		moder_refer := moders[n].UUID
 		log.Println("moder: ", moder_refer)
 
-		// Поля типа Users, связанные с передаваемыми значениями из функции
-		client := ds.User{UUID: userUUID}
+		//поля типа Users, связанные с передавыемыми значениями из функции
+		client := ds.User{UUID: client_id}
 		moder := ds.User{UUID: moder_refer}
 
-		request = &ds.TransferRequest{
+		NewTransferRequest := &ds.TransferRequest{
 			ID:            uint(len([]ds.TransferRequest{})),
-			ClientRefer:   userUUID,
+			ClientRefer:   client_id,
 			Client:        client,
 			ModerRefer:    moder_refer,
 			Moder:         moder,
@@ -387,53 +338,25 @@ func (r *Repository) CreateTransferRequest(requestBody ds.CreateTransferRequestB
 			DateProcessed: nil,
 			DateFinished:  nil,
 		}
-
-		err := r.db.Create(request).Error
-		if err != nil {
-			return 0, err
-		}
+		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
 	}
-
-	err = r.SetRequestOrbits(int(request.ID), orbit_names)
-	if err != nil {
-		return 0, err
-	}
-
-	// Uncomment the following block if needed
-	// for _, orbit_id := range orbit_ids {
-	// 	transfer_to_orbit := ds.TransferToOrbit{}
-	// 	transfer_to_orbit.RequestRefer = request.ID
-	// 	transfer_to_orbit.OrbitRefer = uint(orbit_id)
-	// 	err = r.CreateTransferToOrbit(transfer_to_orbit)
-	//
-	// 	if err != nil {
-	// 		return 0, err
-	// 	}
-	// }
-
-	// Return request ID along with nil error
-	return int(request.ID), nil
+	return request, nil
 }
 
 func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
 	var orbit_ids []int
-	log.Println(transferID, " - ", orbits)
 	for _, orbit_name := range orbits {
 		orbit, err := r.GetOrbitByName(orbit_name)
-		log.Println("orbit: ", orbit)
 		if err != nil {
 			return err
 		}
 
 		for _, ele := range orbit_ids {
 			if ele == int(orbit.ID) {
-				log.Println("!!!")
 				continue
 			}
 		}
-		log.Println("BEFORE :", orbit_ids)
 		orbit_ids = append(orbit_ids, int(orbit.ID))
-		log.Println("AFTER :", orbit_ids)
 	}
 
 	var existing_links []ds.TransferToOrbit
@@ -441,7 +364,6 @@ func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
 	if err != nil {
 		return err
 	}
-	log.Println("LINKS: ", existing_links)
 	for _, link := range existing_links {
 		orbitFound := false
 		orbitIndex := -1
@@ -452,12 +374,9 @@ func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
 				break
 			}
 		}
-		log.Println("ORB F: ", orbitFound)
 		if orbitFound {
-			log.Println("APPEND: ")
 			orbit_ids = append(orbit_ids[:orbitIndex], orbit_ids[orbitIndex+1:]...)
 		} else {
-			log.Println("DELETE: ")
 			err := r.db.Model(&ds.TransferToOrbit{}).Delete(&link).Error
 			if err != nil {
 				return err
@@ -470,7 +389,6 @@ func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
 			RequestRefer: uint(transferID),
 			OrbitRefer:   uint(orbit_id),
 		}
-		log.Println("NEW LINK", newLink.OrbitRefer, " --- ", newLink.RequestRefer)
 		err := r.db.Model(&ds.TransferToOrbit{}).Create(&newLink).Error
 		if err != nil {
 			return nil
@@ -505,14 +423,6 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 	}
 
 	return nil
-}
-
-func (r *Repository) DeleteTransferRequest(req_id uint) error {
-	if r.db.Where("id = ?", req_id).First(&ds.TransferRequest{}).Error != nil {
-
-		return r.db.Where("id = ?", req_id).First(&ds.TransferRequest{}).Error
-	}
-	return r.db.Model(&ds.TransferRequest{}).Where("id = ?", req_id).Update("status", "Удалена").Error
 }
 
 // =================================================================================
@@ -551,23 +461,26 @@ func (r *Repository) GetOrbitsFromTransfer(id int) ([]ds.Orbit, error) {
 
 }
 
-// старое создание м-м -> не исп скорее всего -> удалить?
-//func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error {
-//	orbit := ds.Orbit{ID: orbit_refer}
-//	request := ds.TransferRequest{ID: request_refer}
-//
-//	NewMtM := &ds.TransferToOrbit{
-//		ID:           uint(len([]ds.TransferToOrbit{})),
-//		Orbit:        orbit,
-//		OrbitRefer:   orbit_refer,
-//		Request:      request,
-//		RequestRefer: request_refer,
-//	}
-//	return r.db.Create(NewMtM).Error
-//}
+func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error {
+	orbit := ds.Orbit{ID: orbit_refer}
+	request := ds.TransferRequest{ID: request_refer}
+
+	err := r.db.Where("request_refer = ?", request_refer).Where("orbit_refer = ?", orbit_refer).First(&ds.TransferToOrbit{}).Error
+	if err != nil {
+		NewMtM := &ds.TransferToOrbit{
+			Orbit:        orbit,
+			OrbitRefer:   orbit_refer,
+			Request:      request,
+			RequestRefer: request_refer,
+		}
+		return r.db.Create(NewMtM).Error
+	} else {
+		return err
+	}
+}
 
 // удаляет одну запись за раз
-func (r *Repository) DeleteTransferToOrbitSingle(transfer_id uint, orbit_id uint) (error, error) {
+func (r *Repository) DeleteTransferToOrbitSingle(transfer_id string, orbit_id int) (error, error) {
 	if r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil ||
 		r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil {
 

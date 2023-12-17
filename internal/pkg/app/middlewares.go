@@ -16,19 +16,16 @@ const jwtPrefix = "Bearer "
 
 func GetJWTToken(gCtx *gin.Context) (string, error) {
 	jwtStr := gCtx.GetHeader("Authorization")
-	//log.Println("\nJWT before cookie: ", jwtStr)
 
 	if jwtStr == "" {
 		log.Println("\ngetting JWT from cookie")
 		var cookieErr error
 		jwtStr, cookieErr = gCtx.Cookie("orbits-api-token")
-		//log.Println("\nJWT after cookie: ", jwtStr)
 		if cookieErr != nil {
 			gCtx.AbortWithStatus(http.StatusBadRequest)
 			return "", cookieErr
 		}
 	}
-	//log.Println("\nfin JWT: ", jwtStr)
 	return jwtStr, nil
 }
 
@@ -59,14 +56,6 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 		}
 
 		jwtStr = jwtStr[len(jwtPrefix):]
-
-		asd, err := GetUserClaims(jwtStr, c, a)
-		if err != nil {
-			panic(err)
-			return
-		}
-		log.Println(jwtStr)
-		log.Println(asd.Role)
 
 		err = a.redis.CheckJWTInBlackList(c.Request.Context(), jwtStr)
 		if err == nil { // значит что токен в блеклисте
@@ -100,9 +89,6 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 			log.Printf("Роль %d не указана в %d", myClaims.Role, assignedRoles)
 			return
 		}
-
-		log.Println("AssignedRoles: ", assignedRoles, "\n",
-			"UserRoles: ", myClaims.Role)
 
 		c.Set("userRole", myClaims.Role)
 		c.Set("userUUID", myClaims.UserUUID)

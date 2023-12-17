@@ -76,3 +76,16 @@ type SetRequestOrbitsRequestBody struct {
 	RequestID int
 	Orbits    []string
 }
+
+type TestReqBody struct {
+	Orbit string
+}
+
+type TestDelBody struct {
+	Orbit string
+	Req   string
+}
+
+type DelTransfReqRequestBody struct {
+	Req int
+}
