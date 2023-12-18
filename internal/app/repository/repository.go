@@ -423,20 +423,29 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 
 func (r *Repository) GetTransferRequestResult(id uint) error {
 	url := "http://127.0.0.1:4000"
-	requestBody := map[string]interface{}{"id": int(id)}
 
+	authKey := "secret-async-orbits"
+
+	// Создаем запрос
+	requestBody := map[string]interface{}{"id": int(id)}
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
 
-	defer resp.Body.Close()
+	req.Header.Set("Authorization", authKey)
+	req.Header.Set("Content-Type", "application/json")
 
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	return nil
 }
 
