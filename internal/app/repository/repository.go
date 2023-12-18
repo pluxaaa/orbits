@@ -4,9 +4,11 @@ import (
 	"L1/internal/app/ds"
 	mClient "L1/internal/app/minio"
 	"L1/internal/app/role"
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -14,6 +16,7 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -278,21 +281,6 @@ func (r *Repository) GetRequestByID(id uint, userUUID uuid.UUID, userRole any) (
 	return request, nil
 }
 
-func (r *Repository) GetRequestsByStatus(status string) ([]ds.TransferRequest, error) {
-	requests := []ds.TransferRequest{}
-
-	err := r.db.
-		Preload("Client").Preload("Moder"). //данные для полей типа User: {ID, Name, IsModer)
-		Order("id").
-		Find(&requests).Where("status = ?", status).Error
-
-	if err != nil {
-		return nil, err
-	}
-
-	return requests, nil
-}
-
 // попытка получить заявку для конкретного клиента со статусом Черновик
 func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequest, error) {
 	request := &ds.TransferRequest{}
@@ -337,6 +325,7 @@ func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferReq
 			DateCreated:   time.Now(),
 			DateProcessed: nil,
 			DateFinished:  nil,
+			Result:        nil,
 		}
 		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
 	}
@@ -406,6 +395,13 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 		}
 	}
 
+	if status == "Оказана" {
+		err := r.GetTransferRequestResult(id)
+		if err != nil {
+			fmt.Println("Error sending POST request:", err)
+		}
+	}
+
 	if status == ds.ReqStatuses[1] {
 		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_processed", time.Now()).Error
 		if err != nil {
@@ -422,6 +418,34 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 		err = r.DeleteTransferToOrbitEvery(id)
 	}
 
+	return nil
+}
+
+func (r *Repository) GetTransferRequestResult(id uint) error {
+	url := "http://127.0.0.1:4000"
+	requestBody := map[string]interface{}{"id": int(id)}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func (r *Repository) SetTransferRequestResult(id int, status bool) error {
+	result := &ds.TransferRequest{ID: uint(id)}
+	err := r.db.Model(result).Update("result", status).Omit("result").Error
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

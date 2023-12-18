@@ -95,6 +95,8 @@ func (a *Application) StartServer() {
 	a.r.GET("/orbits", a.getAllOrbits)
 	a.r.GET("/orbits/:orbit_name", a.getDetailedOrbit)
 
+	a.r.POST("/async/:id", a.asyncGetTransferResult)
+
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
 		//создание заявки + добавление в м-м (используется на главной странице)
@@ -118,7 +120,6 @@ func (a *Application) StartServer() {
 	{
 		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
-		authorizedMethods.GET("/transfer_requests/status/:status", a.getRequestsByStatus)
 		authorizedMethods.GET("/transfer_to_orbit/:req_id", a.getOrbitsFromTransfer)
 		authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
 	}
@@ -126,6 +127,22 @@ func (a *Application) StartServer() {
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
+}
+
+func (a *Application) asyncGetTransferResult(c *gin.Context) {
+	var requestBody = &ds.AsyncBody{}
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Println("ERROR")
+		c.Error(err)
+	}
+	log.Println("ASYNC: ", requestBody.ID, " --- ", requestBody.Status)
+
+	err := a.repo.SetTransferRequestResult(requestBody.ID, requestBody.Status)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, requestBody.Status)
 }
 
 // @Summary Получение всех орбит со статусом "Доступна"
@@ -273,7 +290,7 @@ func (a *Application) editOrbit(c *gin.Context) {
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
-	request_body := &ds.TestReqBody{}
+	request_body := &ds.AddOrbitToRequestBody{}
 	if err := c.BindJSON(&request_body); err != nil {
 		c.String(http.StatusBadGateway, "Не могу распознать json")
 		return
@@ -388,19 +405,6 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, request)
 }
 
-// надо??
-func (a *Application) getRequestsByStatus(c *gin.Context) {
-	req_status := c.Param("req_status")
-
-	requests, err := a.repo.GetRequestsByStatus(req_status)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, requests)
-}
-
 func (a *Application) changeRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -497,7 +501,7 @@ func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно до
 
 // удаление записи (одной) из м-м по двум айди
 func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
-	var requestBody ds.TestDelBody
+	var requestBody ds.DelTransferToOrbitBody
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)

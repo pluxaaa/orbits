@@ -37,6 +37,7 @@ type TransferRequest struct {
 	ModerRefer    uuid.UUID  `gorm:"type:uuid"`
 	Moder         User       `gorm:"foreignKey:ModerRefer;references:UUID"`
 	Status        string     `gorm:"type:varchar(20); not null"`
+	Result        *bool      `gorm:"type:bool"`
 	DateCreated   time.Time  `gorm:"type:timestamp"` //timestamp without time zone
 	DateProcessed *time.Time `gorm:"type:timestamp"`
 	DateFinished  *time.Time `gorm:"type:timestamp"`
@@ -77,15 +78,20 @@ type SetRequestOrbitsRequestBody struct {
 	Orbits    []string
 }
 
-type TestReqBody struct {
+type AddOrbitToRequestBody struct {
 	Orbit string
 }
 
-type TestDelBody struct {
+type DelTransferToOrbitBody struct {
 	Orbit string
 	Req   string
 }
 
 type DelTransfReqRequestBody struct {
 	Req int
+}
+
+type AsyncBody struct {
+	ID     int  `json:"id"`
+	Status bool `json:"status"`
 }
