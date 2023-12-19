@@ -105,6 +105,7 @@ func (a *Application) StartServer() {
 		//актуальное обновление записей в м-м (используется в корзине и в детальной заявке)
 		clientMethods.PUT("/transfer_requests/set_orbits", a.setRequestOrbits)
 
+		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
 
@@ -122,11 +123,47 @@ func (a *Application) StartServer() {
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
 		authorizedMethods.GET("/transfer_to_orbit/:req_id", a.getOrbitsFromTransfer)
 		authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
+		authorizedMethods.POST("/transfer_to_orbit/get_order", a.getOrbitOrder)
 	}
 
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
+}
+
+func (a *Application) getOrbitOrder(c *gin.Context) {
+	var requestBody int
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		c.String(http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	orbitOrder, err := a.repo.GetOrbitOrder(requestBody)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	c.JSON(http.StatusOK, orbitOrder)
+}
+
+func (a *Application) updateTransferOrder(c *gin.Context) {
+	var requestBody ds.UpdateVisitNumbersBody
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		c.String(http.StatusBadRequest, "Bad Request")
+		return
+	}
+
+	log.Println("TransferID: ", requestBody.ReqID)
+	log.Println("VisitOrder: ", requestBody.VisitOrder)
+
+	err := a.repo.UpdateVisitNumbers(requestBody)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	c.String(http.StatusCreated, "Порядок посещения изменен")
 }
 
 func (a *Application) asyncGetTransferResult(c *gin.Context) {
@@ -508,21 +545,26 @@ func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
+
 	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 	}
 
-	err1, err2 := a.repo.DeleteTransferToOrbitSingle(requestBody.Req, int(orbit.ID))
-
-	if err1 != nil || err2 != nil {
+	err1 := a.repo.DeleteTransferToOrbitSingle(requestBody.Req, int(orbit.ID))
+	if err1 != nil {
 		c.Error(err1)
-		c.Error(err2)
-		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
 
-	c.String(http.StatusCreated, "Transfer-to-Orbit m-m was deleted")
+	//if err1 != nil || err2 != nil {
+	//	c.Error(err1)
+	//	c.Error(err2)
+	//	c.String(http.StatusBadRequest, "Bad Request")
+	//	return
+	//}
+
+	c.String(http.StatusCreated, "Перелет удален")
 }
 
 func (a *Application) ping(c *gin.Context) {

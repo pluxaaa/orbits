@@ -56,6 +56,7 @@ type Orbit struct {
 
 type TransferToOrbit struct {
 	ID           uint `gorm:"primaryKey;AUTO_INCREMENT"`
+	VisitNumber  uint
 	RequestRefer uint
 	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
 	OrbitRefer   uint
@@ -89,6 +90,16 @@ type DelTransferToOrbitBody struct {
 
 type DelTransfReqRequestBody struct {
 	Req int
+}
+
+type UpdateVisitNumbersBody struct {
+	ReqID      int            `json:"req_id"`
+	VisitOrder map[string]int `json:"visit_order"`
+}
+
+type OrbitOrder struct {
+	OrbitName  string `json:"orbit_name"`
+	VisitOrder int    `json:"visit_order"`
 }
 
 type AsyncBody struct {

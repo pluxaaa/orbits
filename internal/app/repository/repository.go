@@ -426,7 +426,6 @@ func (r *Repository) GetTransferRequestResult(id uint) error {
 
 	authKey := "secret-async-orbits"
 
-	// Создаем запрос
 	requestBody := map[string]interface{}{"id": int(id)}
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -497,14 +496,23 @@ func (r *Repository) GetOrbitsFromTransfer(id int) ([]ds.Orbit, error) {
 func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error {
 	orbit := ds.Orbit{ID: orbit_refer}
 	request := ds.TransferRequest{ID: request_refer}
+	var currTransfers []ds.TransferToOrbit
 
-	err := r.db.Where("request_refer = ?", request_refer).Where("orbit_refer = ?", orbit_refer).First(&ds.TransferToOrbit{}).Error
+	err := r.db.Where("request_refer = ?", request_refer).Find(&currTransfers).Error
 	if err != nil {
+		return err
+	}
+	log.Println("CURR MM: ", len(currTransfers))
+
+	err = r.db.Where("request_refer = ?", request_refer).Where("orbit_refer = ?", orbit_refer).First(&ds.TransferToOrbit{}).Error
+	if err != nil {
+		log.Println("Creating MM #", len(currTransfers)+1)
 		NewMtM := &ds.TransferToOrbit{
 			Orbit:        orbit,
 			OrbitRefer:   orbit_refer,
 			Request:      request,
 			RequestRefer: request_refer,
+			VisitNumber:  uint(len(currTransfers) + 1),
 		}
 		return r.db.Create(NewMtM).Error
 	} else {
@@ -512,15 +520,95 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error 
 	}
 }
 
-// удаляет одну запись за раз
-func (r *Repository) DeleteTransferToOrbitSingle(transfer_id string, orbit_id int) (error, error) {
-	if r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil ||
-		r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil {
+func (r *Repository) GetOrbitOrder(id int) ([]ds.OrbitOrder, error) {
+	transfer_to_orbits := []ds.TransferToOrbit{}
 
-		return r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error,
-			r.db.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error
+	err := r.db.Model(&ds.TransferToOrbit{}).Where("request_refer = ?", id).Find(&transfer_to_orbits).Error
+	if err != nil {
+		return []ds.OrbitOrder{}, err
 	}
-	return r.db.Where("request_refer = ?", transfer_id).Where("orbit_refer = ?", orbit_id).Delete(&ds.TransferToOrbit{}).Error, nil
+
+	var orbitOrders []ds.OrbitOrder
+	for _, transfer_to_orbit := range transfer_to_orbits {
+		orbit, err := r.GetOrbitByID(transfer_to_orbit.OrbitRefer)
+		if err != nil {
+			continue
+		}
+		orbitOrder := ds.OrbitOrder{
+			OrbitName:  orbit.Name,
+			VisitOrder: int(transfer_to_orbit.VisitNumber),
+		}
+		orbitOrders = append(orbitOrders, orbitOrder)
+	}
+
+	return orbitOrders, nil
+}
+
+// обновление порядка перелетов в м-м
+func (r *Repository) UpdateVisitNumbers(updateRequest ds.UpdateVisitNumbersBody) error {
+
+	for orbitName, visitNumber := range updateRequest.VisitOrder {
+		orbit, err := r.GetOrbitByName(orbitName)
+		if err != nil {
+			return err
+		}
+
+		err = r.db.Model(&ds.TransferToOrbit{}).Where("orbit_refer = ?", orbit.ID).
+			Updates(map[string]interface{}{"visit_number": visitNumber}).Error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// удаляет одну запись за раз
+func (r *Repository) DeleteTransferToOrbitSingle(transfer_id string, orbit_id int) error {
+	tx := r.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// ошибка если что-то не совпадает/чего-то нет
+	if tx.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil ||
+		tx.Where("request_refer = ?", transfer_id).First(&ds.TransferToOrbit{}).Error != nil {
+
+		tx.Rollback()
+		return tx.Error
+	}
+
+	var currTransfer ds.TransferToOrbit
+
+	// получение удаляемой записи из м-м
+	if err := tx.Where("request_refer = ?", transfer_id).
+		Where("orbit_refer = ?", orbit_id).First(&currTransfer).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	log.Println("CURR MM: ", currTransfer.VisitNumber)
+
+	// обновление visit_number для записей, у которых он больше чем у удаляемой
+	if err := tx.Model(&ds.TransferToOrbit{}).
+		Where("request_refer = ?", transfer_id).
+		Where("visit_number > ?", currTransfer.VisitNumber).
+		Update("visit_number", gorm.Expr("visit_number - 1")).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// удаление указанной м-м
+	if err := tx.Where("request_refer = ?", transfer_id).
+		Where("orbit_refer = ?", orbit_id).
+		Delete(&ds.TransferToOrbit{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Завершение транзакции
+	return tx.Commit().Error
 }
 
 // удаляет все записи по id реквеста
