@@ -11,6 +11,7 @@ import (
 	"context"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"os"
 	"strings"
 
 	"fmt"
@@ -99,13 +100,8 @@ func (a *Application) StartServer() {
 
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
-		//создание заявки + добавление в м-м (используется на главной странице)
-		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
-
-		//актуальное обновление записей в м-м (используется в корзине и в детальной заявке)
-		clientMethods.PUT("/transfer_requests/set_orbits", a.setRequestOrbits)
-
 		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
+		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
 
@@ -113,8 +109,8 @@ func (a *Application) StartServer() {
 	{
 		moderMethods.PUT("/orbits/:orbit_name/edit", a.editOrbit)
 		moderMethods.POST("/orbits/new_orbit", a.newOrbit)
+		moderMethods.POST("/orbits/upload_image", a.uploadOrbitImage)
 		moderMethods.DELETE("/orbits/change_status/:orbit_name", a.changeOrbitStatus)
-		moderMethods.GET("/ping", a.ping)
 	}
 
 	authorizedMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator))
@@ -155,9 +151,6 @@ func (a *Application) updateTransferOrder(c *gin.Context) {
 		return
 	}
 
-	log.Println("TransferID: ", requestBody.ReqID)
-	log.Println("VisitOrder: ", requestBody.VisitOrder)
-
 	err := a.repo.UpdateVisitNumbers(requestBody)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -172,7 +165,6 @@ func (a *Application) asyncGetTransferResult(c *gin.Context) {
 		log.Println("ERROR")
 		c.Error(err)
 	}
-	log.Println("ASYNC: ", requestBody.ID, " --- ", requestBody.Status)
 
 	err := a.repo.SetTransferRequestResult(requestBody.ID, requestBody.Status)
 	if err != nil {
@@ -222,6 +214,7 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"ID":          orbit.ID,
 		"Name":        orbit.Name,
 		"IsAvailable": orbit.IsAvailable,
 		"Apogee":      orbit.Apogee,
@@ -245,6 +238,34 @@ func (a *Application) changeOrbitStatus(c *gin.Context) {
 	}
 }
 
+func (a *Application) uploadOrbitImage(c *gin.Context) {
+	// Получение файла из запроса
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Нет файла с картинкой"})
+		return
+	}
+
+	// Сохранение файла временно
+	tempFilePath := "C:/Users/Lenovo/Desktop/BMSTU/SEM_5/RIP/" + file.Filename
+	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось сохранить картинку"})
+		return
+	}
+	defer os.Remove(tempFilePath) // Удаляем временный файл после использования
+
+	// Вызов репозиторной функции для загрузки изображения в Minio
+	log.Println("temp path ", tempFilePath)
+	imageURL, err := a.repo.UploadImageToMinio(tempFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось загрузить картинку в minio"})
+		return
+	}
+
+	// Вернуть URL изображения в ответе
+	c.JSON(http.StatusOK, imageURL)
+}
+
 // @Summary      Добавление новой орбиты
 // @Description  Добавляет орбиту с полями, указанныим в JSON
 // @Tags Орбиты
@@ -260,6 +281,8 @@ func (a *Application) newOrbit(c *gin.Context) {
 		log.Println("ERROR")
 		c.Error(err)
 	}
+
+	log.Println("req body image :", requestBody.ImageURL)
 
 	err := a.repo.AddOrbit(&requestBody, requestBody.ImageURL)
 	if err != nil {
@@ -287,16 +310,13 @@ func (a *Application) newOrbit(c *gin.Context) {
 // @Success      201  {object}  string
 // @Router       /orbits/{orbit_name}/edit [put]
 func (a *Application) editOrbit(c *gin.Context) {
-	orbit_name := c.Param("orbit_name")
-	orbit, err := a.repo.GetOrbitByName(orbit_name)
-
 	var editingOrbit ds.Orbit
 
 	if err := c.BindJSON(&editingOrbit); err != nil {
 		c.Error(err)
 	}
 
-	err = a.repo.EditOrbit(orbit.ID, editingOrbit)
+	err := a.repo.EditOrbit(editingOrbit.ID, editingOrbit)
 
 	if err != nil {
 		c.Error(err)
@@ -332,7 +352,6 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 		c.String(http.StatusBadGateway, "Не могу распознать json")
 		return
 	}
-	log.Println(request_body)
 
 	// Получение инфы об орбите -> orbit.ID
 	orbit, err := a.repo.GetOrbitByName(orbit_name)
@@ -360,24 +379,6 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, request.ID)
-}
-
-func (a *Application) setRequestOrbits(c *gin.Context) {
-	var requestBody ds.SetRequestOrbitsRequestBody
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		c.String(http.StatusBadRequest, "Не получается распознать json запрос")
-		return
-	}
-	log.Println("SetOrbits\n", requestBody)
-
-	err := a.repo.SetRequestOrbits(requestBody.RequestID, requestBody.Orbits)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Не получилось задать орбиту для заявки\n"+err.Error())
-	}
-
-	c.String(http.StatusCreated, "Орбиты заявки успешно заданы!")
-
 }
 
 // @Summary      Получение всех заявок на трансфер
@@ -420,7 +421,6 @@ func (a *Application) getAllRequests(c *gin.Context) {
 func (a *Application) getDetailedRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
-		log.Println("REQ ID: ", req_id)
 		panic(err)
 	}
 
@@ -449,7 +449,6 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	log.Println(requestBody)
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
@@ -567,13 +566,6 @@ func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 	c.String(http.StatusCreated, "Перелет удален")
 }
 
-func (a *Application) ping(c *gin.Context) {
-	log.Println("ping func")
-	c.JSON(http.StatusOK, gin.H{
-		"auth": true,
-	})
-}
-
 // @Summary Зарегистрировать нового пользователя
 // @Description Добавляет в БД нового пользователя
 // @Tags Аутентификация
@@ -649,7 +641,7 @@ func (a *Application) login(c *gin.Context) {
 	if req.Login == user.Name && user.Pass == a.repo.GenerateHashString(req.Password) {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &ds.JWTClaims{
 			StandardClaims: jwt.StandardClaims{
-				ExpiresAt: time.Now().Add(time.Second * 3600).Unix(), //1h
+				ExpiresAt: time.Now().Add(time.Hour * 24).Unix(), //1h
 				IssuedAt:  time.Now().Unix(),
 				Issuer:    "web-admin",
 			},
@@ -670,7 +662,7 @@ func (a *Application) login(c *gin.Context) {
 			return
 		}
 
-		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Second*3600).
+		c.SetCookie("orbits-api-token", "Bearer "+strToken, int(time.Now().Add(time.Hour*24).
 			Unix()), "", "", true, true)
 
 		c.JSON(http.StatusOK, loginResp{
@@ -680,7 +672,6 @@ func (a *Application) login(c *gin.Context) {
 			TokenType:   "Bearer",
 			ExpiresIn:   int(cfg.JWT.ExpiresIn.Seconds()),
 		})
-		//log.Println("\nUSER: ", user.Name, "\n", strToken, "\n")
 		c.AbortWithStatus(http.StatusOK)
 	} else {
 		c.JSON(http.StatusForbidden, gin.H{"message": "Неправильный логин или пароль"})

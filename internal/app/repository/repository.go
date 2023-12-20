@@ -125,16 +125,9 @@ func (r *Repository) ChangeOrbitStatus(orbitName string) error {
 	return err
 }
 
-func (r *Repository) AddOrbit(orbit *ds.Orbit, imagePath string) error {
-	imageURL := "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg"
-
-	log.Println(imagePath)
-	if imagePath != "" {
-		var err error
-		imageURL, err = r.uploadImageToMinio(imagePath)
-		if err != nil {
-			return err
-		}
+func (r *Repository) AddOrbit(orbit *ds.Orbit, imageURL string) error {
+	if imageURL == "" {
+		imageURL = "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg"
 	}
 
 	var cntOrbits int64
@@ -157,11 +150,7 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 		return err
 	}
 
-	log.Println("OLD IMAGE: ", originalOrbit.ImageURL)
-	log.Println("NEW IMAGE: ", editingOrbit.ImageURL)
-
 	if editingOrbit.ImageURL != originalOrbit.ImageURL && editingOrbit.ImageURL != "" {
-		log.Println("REPLACING IMAGE")
 
 		if originalOrbit.ImageURL != "http://127.0.0.1:9000/pc-bucket/DEFAULT.jpg" {
 			err := r.deleteImageFromMinio(originalOrbit.ImageURL)
@@ -169,21 +158,12 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 				return err
 			}
 		}
-
-		imageURL, err := r.uploadImageToMinio(editingOrbit.ImageURL)
-		if err != nil {
-			return err
-		}
-
-		editingOrbit.ImageURL = imageURL
-
-		log.Println("IMAGE REPLACED")
 	}
 
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
-func (r *Repository) uploadImageToMinio(imagePath string) (string, error) {
+func (r *Repository) UploadImageToMinio(imagePath string) (string, error) {
 	minioClient := mClient.NewMinioClient()
 
 	// Загрузка изображения в Minio
@@ -217,7 +197,6 @@ func (r *Repository) deleteImageFromMinio(imageURL string) error {
 
 func extractObjectNameFromURL(imageURL string) string {
 	parts := strings.Split(imageURL, "/")
-	log.Println("\n\nIMG:   ", parts[len(parts)-1])
 	return parts[len(parts)-1]
 }
 
@@ -299,7 +278,6 @@ func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferReq
 	//проверка есть ли открытая заявка у клиента
 	request, err := r.GetCurrentRequest(client_id)
 	if err != nil {
-		log.Println("NO OPENED REQUESTS => CREATING NEW ONE")
 
 		//назначение модератора
 		moders := []ds.User{}
@@ -309,7 +287,6 @@ func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferReq
 		}
 		n := rand.Int() % len(moders)
 		moder_refer := moders[n].UUID
-		log.Println("moder: ", moder_refer)
 
 		//поля типа Users, связанные с передавыемыми значениями из функции
 		client := ds.User{UUID: client_id}
@@ -330,61 +307,6 @@ func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferReq
 		return NewTransferRequest, r.db.Create(NewTransferRequest).Error
 	}
 	return request, nil
-}
-
-func (r *Repository) SetRequestOrbits(transferID int, orbits []string) error {
-	var orbit_ids []int
-	for _, orbit_name := range orbits {
-		orbit, err := r.GetOrbitByName(orbit_name)
-		if err != nil {
-			return err
-		}
-
-		for _, ele := range orbit_ids {
-			if ele == int(orbit.ID) {
-				continue
-			}
-		}
-		orbit_ids = append(orbit_ids, int(orbit.ID))
-	}
-
-	var existing_links []ds.TransferToOrbit
-	err := r.db.Model(&ds.TransferToOrbit{}).Where("request_refer = ?", transferID).Find(&existing_links).Error
-	if err != nil {
-		return err
-	}
-	for _, link := range existing_links {
-		orbitFound := false
-		orbitIndex := -1
-		for index, ele := range orbit_ids {
-			if ele == int(link.OrbitRefer) {
-				orbitFound = true
-				orbitIndex = index
-				break
-			}
-		}
-		if orbitFound {
-			orbit_ids = append(orbit_ids[:orbitIndex], orbit_ids[orbitIndex+1:]...)
-		} else {
-			err := r.db.Model(&ds.TransferToOrbit{}).Delete(&link).Error
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	for _, orbit_id := range orbit_ids {
-		newLink := ds.TransferToOrbit{
-			RequestRefer: uint(transferID),
-			OrbitRefer:   uint(orbit_id),
-		}
-		err := r.db.Model(&ds.TransferToOrbit{}).Create(&newLink).Error
-		if err != nil {
-			return nil
-		}
-	}
-
-	return nil
 }
 
 func (r *Repository) ChangeRequestStatus(id uint, status string) error {
@@ -502,11 +424,9 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error 
 	if err != nil {
 		return err
 	}
-	log.Println("CURR MM: ", len(currTransfers))
 
 	err = r.db.Where("request_refer = ?", request_refer).Where("orbit_refer = ?", orbit_refer).First(&ds.TransferToOrbit{}).Error
 	if err != nil {
-		log.Println("Creating MM #", len(currTransfers)+1)
 		NewMtM := &ds.TransferToOrbit{
 			Orbit:        orbit,
 			OrbitRefer:   orbit_refer,
@@ -587,8 +507,6 @@ func (r *Repository) DeleteTransferToOrbitSingle(transfer_id string, orbit_id in
 		tx.Rollback()
 		return err
 	}
-
-	log.Println("CURR MM: ", currTransfer.VisitNumber)
 
 	// обновление visit_number для записей, у которых он больше чем у удаляемой
 	if err := tx.Model(&ds.TransferToOrbit{}).
