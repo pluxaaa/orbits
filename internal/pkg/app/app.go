@@ -245,6 +245,8 @@ func (a *Application) uploadOrbitImage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Нет файла с картинкой"})
 		return
 	}
+	orbitName := c.PostForm("orbitName")
+	log.Println(orbitName)
 
 	// Сохранение файла временно
 	tempFilePath := "C:/Users/Lenovo/Desktop/BMSTU/SEM_5/RIP/" + file.Filename
@@ -255,8 +257,7 @@ func (a *Application) uploadOrbitImage(c *gin.Context) {
 	defer os.Remove(tempFilePath) // Удаляем временный файл после использования
 
 	// Вызов репозиторной функции для загрузки изображения в Minio
-	log.Println("temp path ", tempFilePath)
-	imageURL, err := a.repo.UploadImageToMinio(tempFilePath)
+	imageURL, err := a.repo.UploadImageToMinio(tempFilePath, orbitName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось загрузить картинку в minio"})
 		return

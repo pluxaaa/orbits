@@ -163,7 +163,7 @@ func (r *Repository) EditOrbit(orbitID uint, editingOrbit ds.Orbit) error {
 	return r.db.Model(&ds.Orbit{}).Where("id = ?", orbitID).Updates(editingOrbit).Error
 }
 
-func (r *Repository) UploadImageToMinio(imagePath string) (string, error) {
+func (r *Repository) UploadImageToMinio(imagePath, orbitName string) (string, error) {
 	minioClient := mClient.NewMinioClient()
 
 	// Загрузка изображения в Minio
@@ -184,7 +184,10 @@ func (r *Repository) UploadImageToMinio(imagePath string) (string, error) {
 	}
 
 	// Возврат URL изображения в Minio
-	return fmt.Sprintf("http://%s/%s/%s", minioClient.EndpointURL().Host, "pc-bucket", objectName), nil
+	imgURL := fmt.Sprintf("http://%s/%s/%s", minioClient.EndpointURL().Host, "pc-bucket", objectName)
+	err = r.db.Model(&ds.Orbit{}).Where("name = ?", orbitName).Update("image", imgURL).Error
+
+	return imgURL, nil
 }
 
 func (r *Repository) deleteImageFromMinio(imageURL string) error {
@@ -320,7 +323,7 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 	if status == "Оказана" {
 		err := r.GetTransferRequestResult(id)
 		if err != nil {
-			fmt.Println("Error sending POST request:", err)
+			fmt.Println("Ошибка при отправлении запроса:", err)
 		}
 	}
 
