@@ -208,7 +208,7 @@ func extractObjectNameFromURL(imageURL string) string {
 // --------------------------- TRANSFER_REQUESTS METHODS ---------------------------
 // ---------------------------------------------------------------------------------
 
-func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status string) ([]ds.TransferRequest, error) {
+func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status /*client*/ string) ([]ds.TransferRequest, error) {
 
 	requests := []ds.TransferRequest{}
 	qry := r.db
@@ -229,6 +229,14 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status str
 		}
 	}
 
+	//if client != "" {
+	//	clientUUID, err := r.GetUserByName(client)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	qry = qry.Where("client_refer = ?", clientUUID.UUID)
+	//}
+
 	if userRole == role.Moderator {
 		qry = qry.Where("status = ?", ds.ReqStatuses[1])
 	}
@@ -243,6 +251,18 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status str
 	}
 
 	return requests, nil
+}
+
+func (r *Repository) GetDistinctClients() ([]string, error) {
+	var distinctClients []string
+	err := r.db.
+		Table("transfer_requests").
+		Joins("JOIN users ON transfer_requests.client_refer = users.uuid").
+		Select("DISTINCT users.name").
+		Pluck("users.name", &distinctClients).
+		Error
+
+	return distinctClients, err
 }
 
 func (r *Repository) GetRequestByID(id uint, userUUID uuid.UUID, userRole any) (*ds.TransferRequest, error) {

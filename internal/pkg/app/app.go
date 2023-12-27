@@ -111,6 +111,7 @@ func (a *Application) StartServer() {
 		moderMethods.POST("/orbits/new_orbit", a.newOrbit)
 		moderMethods.POST("/orbits/upload_image", a.uploadOrbitImage)
 		moderMethods.DELETE("/orbits/change_status/:orbit_name", a.changeOrbitStatus)
+		moderMethods.GET("/transfer_requests/distinct_clients", a.getDistinctClients)
 	}
 
 	authorizedMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator))
@@ -125,6 +126,14 @@ func (a *Application) StartServer() {
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
+}
+
+func (a *Application) getDistinctClients(c *gin.Context) {
+	distinctClients, err := a.repo.GetDistinctClients()
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+	c.JSON(http.StatusOK, distinctClients)
 }
 
 func (a *Application) getOrbitOrder(c *gin.Context) {
@@ -246,7 +255,6 @@ func (a *Application) uploadOrbitImage(c *gin.Context) {
 		return
 	}
 	orbitName := c.PostForm("orbitName")
-	log.Println(orbitName)
 
 	// Сохранение файла временно
 	tempFilePath := "C:/Users/Lenovo/Desktop/BMSTU/SEM_5/RIP/" + file.Filename
@@ -392,21 +400,16 @@ func (a *Application) getAllRequests(c *gin.Context) {
 	dateStart := c.Query("date_start")
 	dateFin := c.Query("date_fin")
 	status := c.Query("status")
+	//client := c.Query("client")
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
 		panic(exists)
 	}
-	//userUUID, exists := c.Get("userUUID")
-	//if !exists {
-	//	panic(exists)
-	//}
 
-	requests, err := a.repo.GetAllRequests(userRole, dateStart, dateFin, status)
-
+	requests, err := a.repo.GetAllRequests(userRole, dateStart, dateFin, status /*client*/)
 	if err != nil {
-		c.Error(err)
-		return
+		c.AbortWithError(http.StatusInternalServerError, err)
 	}
 
 	c.JSON(http.StatusOK, requests)
