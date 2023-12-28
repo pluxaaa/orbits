@@ -93,15 +93,20 @@ func (a *Application) StartServer() {
 	a.r.POST("/register", a.register)
 	a.r.POST("/logout", a.logout)
 
-	a.r.GET("/orbits", a.getAllOrbits)
 	a.r.GET("/orbits/:orbit_name", a.getDetailedOrbit)
 
 	a.r.POST("/async/:id", a.asyncGetTransferResult)
 
+	anyoneMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator, role.Guest))
+	{
+		anyoneMethods.GET("/orbits", a.getAllOrbits)
+	}
+
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
 		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
-		clientMethods.POST("/orbits/:orbit_name/add", a.addOrbitToRequest)
+		clientMethods.POST("/transfer_to_orbit/add", a.addTransferToOrbit)
+		clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 	}
 
@@ -126,6 +131,45 @@ func (a *Application) StartServer() {
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
+}
+
+func (a *Application) addTransferToOrbit(c *gin.Context) {
+	var requestBody ds.DelTransferToOrbitBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	reqID, _ := strconv.Atoi(requestBody.Req)
+
+	err1 := a.repo.AddTransferToOrbits(uint(reqID), orbit.ID)
+	if err1 != nil {
+		c.Error(err1)
+		return
+	}
+
+	c.String(http.StatusCreated, "Перелет добавлен")
+}
+
+func (a *Application) createTransferRequest(c *gin.Context) {
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		panic(exists)
+	}
+
+	reqID, err := a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
+	c.JSON(http.StatusOK, reqID)
 }
 
 func (a *Application) getDistinctClients(c *gin.Context) {
@@ -196,14 +240,23 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitIncl := c.Query("orbit_incl")
 	isCircle := c.Query("is_circle")
 
-	allOrbits, err := a.repo.GetAllOrbits(orbitName, orbitIncl, isCircle)
+	userUUID, _ := c.Get("userUUID")
+	log.Println("uid ", userUUID)
+
+	allOrbits, reqID, err := a.repo.GetAllOrbits(orbitName, orbitIncl, isCircle, userUUID.(uuid.UUID))
+	log.Println("reqID: ", reqID)
 
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, allOrbits)
+	response := map[string]interface{}{
+		"allOrbits": allOrbits,
+		"reqID":     reqID,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // @Summary      Получение детализированной информации об орбите
@@ -342,52 +395,6 @@ func (a *Application) editOrbit(c *gin.Context) {
 		"Description": editingOrbit.Description,
 		"ImageURL":    editingOrbit.ImageURL,
 	})
-}
-
-// @Summary      Добавление орбиты в заявку на трансфер
-// @Description  Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
-// @Tags Общее
-// @Accept json
-// @Produce      json
-// @Success      200  {object}  string
-// @Param Body body jsonMap true "Данные заказа"
-// @Router       /orbits/{orbit_name}/add [post]
-// удалить?
-func (a *Application) addOrbitToRequest(c *gin.Context) {
-	orbit_name := c.Param("orbit_name")
-
-	request_body := &ds.AddOrbitToRequestBody{}
-	if err := c.BindJSON(&request_body); err != nil {
-		c.String(http.StatusBadGateway, "Не могу распознать json")
-		return
-	}
-
-	// Получение инфы об орбите -> orbit.ID
-	orbit, err := a.repo.GetOrbitByName(orbit_name)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	userUUID, exists := c.Get("userUUID")
-	if !exists {
-		panic(exists)
-	}
-
-	request := &ds.TransferRequest{}
-	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, request.ID)
 }
 
 // @Summary      Получение всех заявок на трансфер

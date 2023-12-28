@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"strings"
@@ -49,6 +50,14 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 		if err != nil {
 			panic(err)
 		}
+
+		if jwtStr == "Bearer guest" {
+			c.Set("userRole", 0)
+			c.Set("userUUID", uuid.Nil)
+
+			return
+		}
+
 		if !strings.HasPrefix(jwtStr, jwtPrefix) {
 			c.AbortWithStatus(http.StatusForbidden)
 
@@ -63,6 +72,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 
 			return
 		}
+
 		if !errors.Is(err, redis.Nil) { // значит что это не ошибка отсуствия - внутренняя ошибка
 			c.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -70,7 +80,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 
 		myClaims, err := GetUserClaims(jwtStr, c, a)
 		if err != nil {
-			panic(err)
+			log.Println("error GetUserClaims")
 			return
 		}
 
