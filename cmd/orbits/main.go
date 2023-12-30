@@ -6,9 +6,9 @@ import (
 	"log"
 )
 
-// @title orbits
+// @title orbits docs
 // @version 0.0-0
-// @description orbit transfer
+// @description ORBIT TRANSFER
 
 // @host localhost:8000
 // @schemes http

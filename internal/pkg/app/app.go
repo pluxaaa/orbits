@@ -105,8 +105,6 @@ func (a *Application) StartServer() {
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
 		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
-		//clientMethods.POST("/transfer_to_orbit/add", a.addTransferToOrbit)
-		//clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
 		clientMethods.PUT("/orbits/:orbit_name/add", a.addOrbitToRequest)
 	}
@@ -133,15 +131,16 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
-// @Summary      Добавление орбиты в заявку на трансфер
-// @Description  Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
-// @Tags Общее
+// @Summary Добавление орбиты в заявку на трансфер
+// @Description Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
+// @Tags Орбиты
 // @Accept json
-// @Produce      json
-// @Success      200  {object}  string
-// @Param Body body jsonMap true "Данные заказа"
-// @Router       /orbits/{orbit_name}/add [post]
-// удалить?
+// @Produce json
+// @Success 200 {string} string "Орбита добавлена успешно"
+// @Failure 400 {string} string "Некорректные данные заявки или орбиты"
+// @Param orbit_name path string true "Название орбиты" format(ascii)
+// @Security ApiKeyAuth
+// @Router /orbits/{orbit_name}/add [post]
 func (a *Application) addOrbitToRequest(c *gin.Context) {
 	orbit_name := c.Param("orbit_name")
 
@@ -173,45 +172,14 @@ func (a *Application) addOrbitToRequest(c *gin.Context) {
 	c.String(http.StatusOK, "Орбита добавлена")
 }
 
-//func (a *Application) addTransferToOrbit(c *gin.Context) {
-//	var requestBody ds.DelTransferToOrbitBody
-//
-//	if err := c.BindJSON(&requestBody); err != nil {
-//		c.Error(err)
-//		c.AbortWithError(http.StatusBadRequest, err)
-//		return
-//	}
-//
-//	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
-//	if err != nil {
-//		c.AbortWithError(http.StatusInternalServerError, err)
-//	}
-//
-//	reqID, _ := strconv.Atoi(requestBody.Req)
-//
-//	err1 := a.repo.AddTransferToOrbits(uint(reqID), orbit.ID)
-//	if err1 != nil {
-//		c.Error(err1)
-//		return
-//	}
-//
-//	c.String(http.StatusCreated, "Перелет добавлен")
-//}
-//
-//func (a *Application) createTransferRequest(c *gin.Context) {
-//	userUUID, exists := c.Get("userUUID")
-//	if !exists {
-//		panic(exists)
-//	}
-//
-//	reqID, err := a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
-//	if err != nil {
-//		c.AbortWithError(http.StatusInternalServerError, err)
-//	}
-//
-//	c.JSON(http.StatusOK, reqID)
-//}
-
+// @Summary Получение порядка перелетов по орибтам
+// @Description Возвращает порядок перелетов по орбитам для конкретной заявки
+// @Tags Трансферы
+// @Accept json
+// @Produce json
+// @Param req_id path int true "ID заявки"
+// @Success 200 {object} ds.OrbitOrder "Успешный ответ с порядком перелетов по орбитам"
+// @Router /orbits/{req_id} [get]
 func (a *Application) getOrbitOrder(c *gin.Context) {
 	req_id, _ := strconv.Atoi(c.Param("req_id"))
 
@@ -223,6 +191,19 @@ func (a *Application) getOrbitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, orbitOrder)
 }
 
+// @Summary Обновление порядка посещения орбит в заявке
+// @Description Обновляет порядок посещения орбит в указанной заявке на основе предоставленных данных
+// @Tags Трансферы
+// @Accept json
+// @Produce plain
+// @Param request_body body ds.UpdateTransferOrdersBody true "Тело запроса для обновления порядка"
+// @Security ApiKeyAuth
+// @Success 201 {string} string "Порядок посещения успешно изменен"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 403 {string} string "Доступ запрещен, отсутствует авторизация"
+// @Failure 404 {string} string "Заявка не найдена"
+// @Failure 500 {string} string "Ошибка при обновлении порядка посещения"
+// @Router /transfers/update-order [put]
 func (a *Application) updateTransferOrder(c *gin.Context) {
 	var requestBody ds.UpdateTransferOrdersBody
 	if err := c.BindJSON(&requestBody); err != nil {
@@ -239,11 +220,20 @@ func (a *Application) updateTransferOrder(c *gin.Context) {
 	c.String(http.StatusCreated, "Порядок посещения изменен")
 }
 
+// @Summary Обновление поля успеха маневра в заявке
+// @Description Получает ответ от выделенного сервиса и вносит изменения в БД
+// @Tags Асинхронный сервис
+// @Accept json
+// @Produce json
+// @Param request_body body ds.AsyncBody true "Тело запроса для обновления результата маневра"
+// @Success 200 {string} string "Статус успешно обновлен"
+// @Router /transfer/result [post]
 func (a *Application) asyncGetTransferResult(c *gin.Context) {
 	var requestBody = &ds.AsyncBody{}
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Println("ERROR")
 		c.Error(err)
+		return
 	}
 
 	err := a.repo.SetTransferRequestResult(requestBody.ID, requestBody.Status)
@@ -254,13 +244,17 @@ func (a *Application) asyncGetTransferResult(c *gin.Context) {
 	c.JSON(http.StatusOK, requestBody.Status)
 }
 
-// @Summary Получение всех орбит со статусом "Доступна"
-// @Description Возвращает всех доступные орбиты
+// @Summary Получение всех орбит со статусом "Доступна" по фильтрам
+// @Description Возвращает все доступные орбиты по указанным фильтрам
 // @Tags Орбиты
 // @Accept json
 // @Produce json
-// @Success 200 {} json
+// @Success 200 {object} map[string]interface{} "Успешно получены орбиты"
+// @Failure 400 {string} string "Некорректные параметры запроса"
 // @Param orbit_name query string false "Название орбиты или его часть"
+// @Param orbit_incl query string false "Включение орбит в заявку (true/false)"
+// @Param is_circle query string false "Круговая орбита (true/false)"
+// @Security ApiKeyAuth
 // @Router /orbits [get]
 func (a *Application) getAllOrbits(c *gin.Context) {
 	orbitName := c.Query("orbit_name")
@@ -313,18 +307,35 @@ func (a *Application) getDetailedOrbit(c *gin.Context) {
 
 }
 
-// фактически - удаление услуги (status=false, не выводится)
+// @Summary Изменение статуса орбиты
+// @Description Изменяет статус указанной орбиты
+// @Tags Орбиты
+// @Accept json
+// @Produce json
+// @Param orbit_name path string true "Имя орбиты для изменения статуса"
+// @Success 200 {string} string "Статус орбиты успешно изменен"
+// @Router /orbits/{orbit_name}/status [delete]
 func (a *Application) changeOrbitStatus(c *gin.Context) {
 	orbitName := c.Param("orbit_name")
 
 	err := a.repo.ChangeOrbitStatus(orbitName)
-
 	if err != nil {
 		c.Error(err)
 		return
 	}
+
+	c.JSON(http.StatusOK, "Статус орбиты успешно изменен")
 }
 
+// @Summary Загрузка изображения для орбиты
+// @Description Загружает изображение для указанной орбиты и сохраняет его в Minio
+// @Tags Орбиты
+// @Accept mpfd
+// @Produce json
+// @Param orbitName formData string true "Имя орбиты, для которой загружается изображение"
+// @Param image formData file true "Изображение для загрузки"
+// @Success 200 {object} string "Успешно загружено изображение в Minio"
+// @Router /orbits/image [post]
 func (a *Application) uploadOrbitImage(c *gin.Context) {
 	// Получение файла из запроса
 	file, err := c.FormFile("image")
@@ -420,12 +431,17 @@ func (a *Application) editOrbit(c *gin.Context) {
 	})
 }
 
-// @Summary      Получение всех заявок на трансфер
-// @Description  Получает все заявки на трансфер
-// @Tags         Заявки на трансфер
-// @Produce      json
-// @Success      200  {object}  string
-// @Router       /transfer_requests [get]
+// @Summary Получение всех заявок на трансфер
+// @Description Получает все заявки на трансфер
+// @Tags Заявки на трансфер
+// @Produce json
+// @Success 200 {array} string "Список заявок на трансфер"
+// @Failure 500 {string} string "Внутренняя ошибка сервера"
+// @Param date_start query string false "Дата начала периода фильтрации (YYYY-MM-DD)"
+// @Param date_fin query string false "Дата окончания периода фильтрации (YYYY-MM-DD)"
+// @Param status query string false "Статус заявки на трансфер"
+// @Security ApiKeyAuth
+// @Router /transfer_requests [get]
 func (a *Application) getAllRequests(c *gin.Context) {
 	dateStart := c.Query("date_start")
 	dateFin := c.Query("date_fin")
@@ -476,6 +492,19 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, request)
 }
 
+// @Summary Изменение статуса заявки
+// @Description Изменяет статус указанной заявки в зависимости от роли пользователя
+// @Tags Заявки на трансфер
+// @Accept json
+// @Produce plain
+// @Param request_body body ds.ChangeTransferStatusRequestBody true "Тело запроса для изменения статуса заявки"
+// @Security ApiKeyAuth
+// @Success 201 {string} string "Статус заявки успешно изменен"
+// @Failure 400 {string} string "Неверный запрос"
+// @Failure 403 {string} string "Запрещено изменение статуса"
+// @Failure 404 {string} string "Заявка не найдена"
+// @Failure 500 {string} string "Внутренняя ошибка сервера"
+// @Router /requests/status [put]
 func (a *Application) changeRequestStatus(c *gin.Context) {
 	var requestBody ds.ChangeTransferStatusRequestBody
 
@@ -552,6 +581,19 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 	}
 }
 
+// @Summary Получение орбит из заявки
+// @Description Возвращает список орбит, связанных с указанной заявкой
+// @Tags Трансферы
+// @Accept json
+// @Produce json
+// @Param req_id path int true "ID заявки"
+// @Security ApiKeyAuth
+// @Success 200 {array} ds.Orbit "Список орбит, связанных с заявкой"
+// @Failure 400 {string} string "Ошибка в ID заявки"
+// @Failure 403 {string} string "Доступ запрещен, отсутствует авторизация"
+// @Failure 404 {string} string "Заявка не найдена"
+// @Failure 500 {string} string "Ошибка при получении орбит из заявки"
+// @Router /orbits/transfer/{req_id} [get]
 func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно добавить проверку на авторизацию пользователя
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 	if err != nil {
@@ -569,7 +611,19 @@ func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно до
 
 }
 
-// удаление записи (одной) из м-м по двум айди
+// @Summary Удаление перелета по двум ID
+// @Description Удаляет перелет между указанной заявкой и орбитой по их идентификаторам
+// @Tags Трансферы
+// @Accept json
+// @Produce plain
+// @Param request_body body ds.DelTransferToOrbitBody true "Тело запроса для удаления связи"
+// @Security ApiKeyAuth
+// @Success 201 {string} string "Перелет успешно удален"
+// @Failure 400 {string} string "Bad Request"
+// @Failure 403 {string} string "Доступ запрещен, отсутствует авторизация"
+// @Failure 404 {string} string "Орбита не найдена"
+// @Failure 500 {string} string "Ошибка при удалении связи"
+// @Router /transfers/delete [delete]
 func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 	var requestBody ds.DelTransferToOrbitBody
 
@@ -589,13 +643,6 @@ func (a *Application) deleteTransferToOrbitSingle(c *gin.Context) {
 		c.Error(err1)
 		return
 	}
-
-	//if err1 != nil || err2 != nil {
-	//	c.Error(err1)
-	//	c.Error(err2)
-	//	c.String(http.StatusBadRequest, "Bad Request")
-	//	return
-	//}
 
 	c.String(http.StatusCreated, "Перелет удален")
 }
