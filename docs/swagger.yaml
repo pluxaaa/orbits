@@ -1,9 +1,5 @@
 basePath: /
 definitions:
-  app.jsonMap:
-    additionalProperties:
-      type: string
-    type: object
   app.loginReq:
     properties:
       login:
@@ -17,19 +13,18 @@ definitions:
         type: string
       expires_in:
         type: integer
-      role:
-        $ref: '#/definitions/role.Role'
-      token_type:
+      login:
         type: string
-      username:
+      role:
+        type: integer
+      token_type:
         type: string
     type: object
   app.registerReq:
     properties:
-      name:
-        description: лучше назвать то же самое что login
+      login:
         type: string
-      pass:
+      password:
         type: string
     type: object
   app.registerResp:
@@ -37,13 +32,25 @@ definitions:
       ok:
         type: boolean
     type: object
+  ds.AsyncBody:
+    properties:
+      id:
+        type: integer
+      status:
+        type: boolean
+    type: object
   ds.ChangeTransferStatusRequestBody:
     properties:
+      reqID:
+        type: integer
       status:
         type: string
-      transferID:
-        type: integer
-      userName:
+    type: object
+  ds.DelTransferToOrbitBody:
+    properties:
+      orbit:
+        type: string
+      req:
         type: string
     type: object
   ds.Orbit:
@@ -65,21 +72,27 @@ definitions:
       perigee:
         type: string
     type: object
-  role.Role:
-    enum:
-    - 0
-    - 1
-    - 2
-    type: integer
-    x-enum-varnames:
-    - Guest
-    - Client
-    - Moderator
+  ds.OrbitOrder:
+    properties:
+      orbit_name:
+        type: string
+      transfer_order:
+        type: integer
+    type: object
+  ds.UpdateTransferOrdersBody:
+    properties:
+      req_id:
+        type: integer
+      transfer_order:
+        additionalProperties:
+          type: integer
+        type: object
+    type: object
 host: localhost:8000
 info:
   contact: {}
-  description: orbit transfer
-  title: orbits
+  description: ORBIT TRANSFER
+  title: orbits docs
   version: 0.0-0
 paths:
   /login:
@@ -121,20 +134,35 @@ paths:
     get:
       consumes:
       - application/json
-      description: Возвращает всех доступные орбиты
+      description: Возвращает все доступные орбиты по указанным фильтрам
       parameters:
       - description: Название орбиты или его часть
         in: query
         name: orbit_name
         type: string
+      - description: Включение орбит в заявку (true/false)
+        in: query
+        name: orbit_incl
+        type: string
+      - description: Круговая орбита (true/false)
+        in: query
+        name: is_circle
+        type: string
       produces:
       - application/json
       responses:
-        "302":
-          description: Found
+        "200":
+          description: Успешно получены орбиты
           schema:
-            type: ""
-      summary: Получение всех орбит со статусом "Доступна"
+            additionalProperties: true
+            type: object
+        "400":
+          description: Некорректные параметры запроса
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Получение всех орбит со статусом "Доступна" по фильтрам
       tags:
       - Орбиты
   /orbits/{orbit_name}:
@@ -163,22 +191,28 @@ paths:
       description: Создает заявку на трансфер в статусе (или добавляет в открытую)
         и добавляет выбранную орбиту
       parameters:
-      - description: Данные заказа
-        in: body
-        name: Body
+      - description: Название орбиты
+        format: ascii
+        in: path
+        name: orbit_name
         required: true
-        schema:
-          $ref: '#/definitions/app.jsonMap'
+        type: string
       produces:
       - application/json
       responses:
-        "302":
-          description: Found
+        "200":
+          description: Орбита добавлена успешно
           schema:
             type: string
+        "400":
+          description: Некорректные данные заявки или орбиты
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
       summary: Добавление орбиты в заявку на трансфер
       tags:
-      - Общее
+      - Орбиты
   /orbits/{orbit_name}/edit:
     put:
       consumes:
@@ -198,6 +232,74 @@ paths:
           schema:
             type: string
       summary: Изменение орбиты
+      tags:
+      - Орбиты
+  /orbits/{orbit_name}/status:
+    delete:
+      consumes:
+      - application/json
+      description: Изменяет статус указанной орбиты
+      parameters:
+      - description: Имя орбиты для изменения статуса
+        in: path
+        name: orbit_name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Статус орбиты успешно изменен
+          schema:
+            type: string
+      summary: Изменение статуса орбиты
+      tags:
+      - Орбиты
+  /orbits/{req_id}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает порядок перелетов по орбитам для конкретной заявки
+      parameters:
+      - description: ID заявки
+        in: path
+        name: req_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешный ответ с порядком перелетов по орбитам
+          schema:
+            $ref: '#/definitions/ds.OrbitOrder'
+      summary: Получение порядка перелетов по орибтам
+      tags:
+      - Трансферы
+  /orbits/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает изображение для указанной орбиты и сохраняет его в Minio
+      parameters:
+      - description: Имя орбиты, для которой загружается изображение
+        in: formData
+        name: orbitName
+        required: true
+        type: string
+      - description: Изображение для загрузки
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешно загружено изображение в Minio
+          schema:
+            type: string
+      summary: Загрузка изображения для орбиты
       tags:
       - Орбиты
   /orbits/new_orbit:
@@ -222,6 +324,47 @@ paths:
       summary: Добавление новой орбиты
       tags:
       - Орбиты
+  /orbits/transfer/{req_id}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает список орбит, связанных с указанной заявкой
+      parameters:
+      - description: ID заявки
+        in: path
+        name: req_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список орбит, связанных с заявкой
+          schema:
+            items:
+              $ref: '#/definitions/ds.Orbit'
+            type: array
+        "400":
+          description: Ошибка в ID заявки
+          schema:
+            type: string
+        "403":
+          description: Доступ запрещен, отсутствует авторизация
+          schema:
+            type: string
+        "404":
+          description: Заявка не найдена
+          schema:
+            type: string
+        "500":
+          description: Ошибка при получении орбит из заявки
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Получение орбит из заявки
+      tags:
+      - Трансферы
   /register:
     post:
       consumes:
@@ -244,16 +387,99 @@ paths:
       summary: Зарегистрировать нового пользователя
       tags:
       - Аутентификация
-  /transfer_requests:
-    get:
-      description: Получает все заявки на трансфер
+  /requests/status:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет статус указанной заявки в зависимости от роли пользователя
+      parameters:
+      - description: Тело запроса для изменения статуса заявки
+        in: body
+        name: request_body
+        required: true
+        schema:
+          $ref: '#/definitions/ds.ChangeTransferStatusRequestBody'
+      produces:
+      - text/plain
+      responses:
+        "201":
+          description: Статус заявки успешно изменен
+          schema:
+            type: string
+        "400":
+          description: Неверный запрос
+          schema:
+            type: string
+        "403":
+          description: Запрещено изменение статуса
+          schema:
+            type: string
+        "404":
+          description: Заявка не найдена
+          schema:
+            type: string
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Изменение статуса заявки
+      tags:
+      - Заявки на трансфер
+  /transfer/result:
+    post:
+      consumes:
+      - application/json
+      description: Получает ответ от выделенного сервиса и вносит изменения в БД
+      parameters:
+      - description: Тело запроса для обновления результата маневра
+        in: body
+        name: request_body
+        required: true
+        schema:
+          $ref: '#/definitions/ds.AsyncBody'
       produces:
       - application/json
       responses:
-        "302":
-          description: Found
+        "200":
+          description: Статус успешно обновлен
           schema:
             type: string
+      summary: Обновление поля успеха маневра в заявке
+      tags:
+      - Асинхронный сервис
+  /transfer_requests:
+    get:
+      description: Получает все заявки на трансфер
+      parameters:
+      - description: Дата начала периода фильтрации (YYYY-MM-DD)
+        in: query
+        name: date_start
+        type: string
+      - description: Дата окончания периода фильтрации (YYYY-MM-DD)
+        in: query
+        name: date_fin
+        type: string
+      - description: Статус заявки на трансфер
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список заявок на трансфер
+          schema:
+            items:
+              type: string
+            type: array
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
       summary: Получение всех заявок на трансфер
       tags:
       - Заявки на трансфер
@@ -276,69 +502,87 @@ paths:
       summary: Получение детализированной заявки на трансфер
       tags:
       - Заявки на трансфер
-  /transfer_requests/{req_id}/delete:
-    post:
-      description: Изменяет статус заявки на трансфер на "Удалена"
-      parameters:
-      - description: ID заявки
-        in: path
-        name: req_id
-        required: true
-        type: string
-      produces:
+  /transfers/delete:
+    delete:
+      consumes:
       - application/json
+      description: Удаляет перелет между указанной заявкой и орбитой по их идентификаторам
+      parameters:
+      - description: Тело запроса для удаления связи
+        in: body
+        name: request_body
+        required: true
+        schema:
+          $ref: '#/definitions/ds.DelTransferToOrbitBody'
+      produces:
+      - text/plain
       responses:
-        "302":
-          description: Found
+        "201":
+          description: Перелет успешно удален
           schema:
             type: string
-      summary: Логическое удаление заявки на трансфер
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "403":
+          description: Доступ запрещен, отсутствует авторизация
+          schema:
+            type: string
+        "404":
+          description: Орбита не найдена
+          schema:
+            type: string
+        "500":
+          description: Ошибка при удалении связи
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Удаление перелета по двум ID
       tags:
-      - Заявки на трансфер
-  /transfer_requests/{transferID}/client_change_status:
+      - Трансферы
+  /transfers/update-order:
     put:
       consumes:
       - application/json
-      description: Изменяет статус заявки на трансфер на любой из доступных для клиента
+      description: Обновляет порядок посещения орбит в указанной заявке на основе
+        предоставленных данных
       parameters:
-      - description: Данные о заявке
+      - description: Тело запроса для обновления порядка
         in: body
-        name: request
+        name: request_body
         required: true
         schema:
-          $ref: '#/definitions/ds.ChangeTransferStatusRequestBody'
+          $ref: '#/definitions/ds.UpdateTransferOrdersBody'
       produces:
-      - application/json
+      - text/plain
       responses:
         "201":
-          description: Created
+          description: Порядок посещения успешно изменен
           schema:
             type: string
-      summary: Изменение статуса заявки на трансфер (для клиента)
-      tags:
-      - Заявки на трансфер
-  /transfer_requests/{transferID}/moder_change_status:
-    put:
-      consumes:
-      - application/json
-      description: Изменяет статус заявки на трансфер на любой из доступных для модератора
-      parameters:
-      - description: Данные о заявке
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ds.ChangeTransferStatusRequestBody'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
+        "400":
+          description: Bad Request
           schema:
             type: string
-      summary: Изменение статуса заявки на трансфер (для модератора)
+        "403":
+          description: Доступ запрещен, отсутствует авторизация
+          schema:
+            type: string
+        "404":
+          description: Заявка не найдена
+          schema:
+            type: string
+        "500":
+          description: Ошибка при обновлении порядка посещения
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Обновление порядка посещения орбит в заявке
       tags:
-      - Заявки на трансфер
+      - Трансферы
 schemes:
 - http
 swagger: "2.0"

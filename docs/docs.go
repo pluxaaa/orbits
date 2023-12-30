@@ -70,7 +70,12 @@ const docTemplate = `{
         },
         "/orbits": {
             "get": {
-                "description": "Возвращает всех доступные орбиты",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Возвращает все доступные орбиты по указанным фильтрам",
                 "consumes": [
                     "application/json"
                 ],
@@ -80,20 +85,78 @@ const docTemplate = `{
                 "tags": [
                     "Орбиты"
                 ],
-                "summary": "Получение всех орбит со статусом \"Доступна\"",
+                "summary": "Получение всех орбит со статусом \"Доступна\" по фильтрам",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "Название орбиты или его часть",
                         "name": "orbit_name",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Включение орбит в заявку (true/false)",
+                        "name": "orbit_incl",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Круговая орбита (true/false)",
+                        "name": "is_circle",
+                        "in": "query"
                     }
                 ],
                 "responses": {
-                    "302": {
-                        "description": "Found",
+                    "200": {
+                        "description": "Успешно получены орбиты",
                         "schema": {
-                            "type": ""
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Некорректные параметры запроса",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/image": {
+            "post": {
+                "description": "Загружает изображение для указанной орбиты и сохраняет его в Minio",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Орбиты"
+                ],
+                "summary": "Загрузка изображения для орбиты",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Имя орбиты, для которой загружается изображение",
+                        "name": "orbitName",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Изображение для загрузки",
+                        "name": "image",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешно загружено изображение в Minio",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -133,6 +196,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/orbits/transfer/{req_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Возвращает список орбит, связанных с указанной заявкой",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Трансферы"
+                ],
+                "summary": "Получение орбит из заявки",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID заявки",
+                        "name": "req_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Список орбит, связанных с заявкой",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/ds.Orbit"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Ошибка в ID заявки",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Доступ запрещен, отсутствует авторизация",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Заявка не найдена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при получении орбит из заявки",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/orbits/{orbit_name}": {
             "get": {
                 "description": "Возвращает подробную информацию об орбите по ее названию",
@@ -164,6 +291,11 @@ const docTemplate = `{
         },
         "/orbits/{orbit_name}/add": {
             "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту",
                 "consumes": [
                     "application/json"
@@ -172,23 +304,28 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Общее"
+                    "Орбиты"
                 ],
                 "summary": "Добавление орбиты в заявку на трансфер",
                 "parameters": [
                     {
-                        "description": "Данные заказа",
-                        "name": "Body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/app.jsonMap"
-                        }
+                        "type": "string",
+                        "format": "ascii",
+                        "description": "Название орбиты",
+                        "name": "orbit_name",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
-                    "302": {
-                        "description": "Found",
+                    "200": {
+                        "description": "Орбита добавлена успешно",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Некорректные данные заявки или орбиты",
                         "schema": {
                             "type": "string"
                         }
@@ -229,6 +366,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/orbits/{orbit_name}/status": {
+            "delete": {
+                "description": "Изменяет статус указанной орбиты",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Орбиты"
+                ],
+                "summary": "Изменение статуса орбиты",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Имя орбиты для изменения статуса",
+                        "name": "orbit_name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Статус орбиты успешно изменен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orbits/{req_id}": {
+            "get": {
+                "description": "Возвращает порядок перелетов по орбитам для конкретной заявки",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Трансферы"
+                ],
+                "summary": "Получение порядка перелетов по орибтам",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID заявки",
+                        "name": "req_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Успешный ответ с порядком перелетов по орбитам",
+                        "schema": {
+                            "$ref": "#/definitions/ds.OrbitOrder"
+                        }
+                    }
+                }
+            }
+        },
         "/register": {
             "post": {
                 "description": "Добавляет в БД нового пользователя",
@@ -263,8 +464,110 @@ const docTemplate = `{
                 }
             }
         },
+        "/requests/status": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Изменяет статус указанной заявки в зависимости от роли пользователя",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Заявки на трансфер"
+                ],
+                "summary": "Изменение статуса заявки",
+                "parameters": [
+                    {
+                        "description": "Тело запроса для изменения статуса заявки",
+                        "name": "request_body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.ChangeTransferStatusRequestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Статус заявки успешно изменен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный запрос",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Запрещено изменение статуса",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Заявка не найдена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/transfer/result": {
+            "post": {
+                "description": "Получает ответ от выделенного сервиса и вносит изменения в БД",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Асинхронный сервис"
+                ],
+                "summary": "Обновление поля успеха маневра в заявке",
+                "parameters": [
+                    {
+                        "description": "Тело запроса для обновления результата маневра",
+                        "name": "request_body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.AsyncBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Статус успешно обновлен",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/transfer_requests": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Получает все заявки на трансфер",
                 "produces": [
                     "application/json"
@@ -273,9 +576,38 @@ const docTemplate = `{
                     "Заявки на трансфер"
                 ],
                 "summary": "Получение всех заявок на трансфер",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Дата начала периода фильтрации (YYYY-MM-DD)",
+                        "name": "date_start",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Дата окончания периода фильтрации (YYYY-MM-DD)",
+                        "name": "date_fin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Статус заявки на трансфер",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
-                    "302": {
-                        "description": "Found",
+                    "200": {
+                        "description": "Список заявок на трансфер",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
                         "schema": {
                             "type": "string"
                         }
@@ -312,28 +644,62 @@ const docTemplate = `{
                 }
             }
         },
-        "/transfer_requests/{req_id}/delete": {
-            "post": {
-                "description": "Изменяет статус заявки на трансфер на \"Удалена\"",
-                "produces": [
+        "/transfers/delete": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Удаляет перелет между указанной заявкой и орбитой по их идентификаторам",
+                "consumes": [
                     "application/json"
                 ],
-                "tags": [
-                    "Заявки на трансфер"
+                "produces": [
+                    "text/plain"
                 ],
-                "summary": "Логическое удаление заявки на трансфер",
+                "tags": [
+                    "Трансферы"
+                ],
+                "summary": "Удаление перелета по двум ID",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "ID заявки",
-                        "name": "req_id",
-                        "in": "path",
-                        "required": true
+                        "description": "Тело запроса для удаления связи",
+                        "name": "request_body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ds.DelTransferToOrbitBody"
+                        }
                     }
                 ],
                 "responses": {
-                    "302": {
-                        "description": "Found",
+                    "201": {
+                        "description": "Перелет успешно удален",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Доступ запрещен, отсутствует авторизация",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Орбита не найдена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при удалении связи",
                         "schema": {
                             "type": "string"
                         }
@@ -341,67 +707,62 @@ const docTemplate = `{
                 }
             }
         },
-        "/transfer_requests/{transferID}/client_change_status": {
+        "/transfers/update-order": {
             "put": {
-                "description": "Изменяет статус заявки на трансфер на любой из доступных для клиента",
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Обновляет порядок посещения орбит в указанной заявке на основе предоставленных данных",
                 "consumes": [
                     "application/json"
                 ],
                 "produces": [
-                    "application/json"
+                    "text/plain"
                 ],
                 "tags": [
-                    "Заявки на трансфер"
+                    "Трансферы"
                 ],
-                "summary": "Изменение статуса заявки на трансфер (для клиента)",
+                "summary": "Обновление порядка посещения орбит в заявке",
                 "parameters": [
                     {
-                        "description": "Данные о заявке",
-                        "name": "request",
+                        "description": "Тело запроса для обновления порядка",
+                        "name": "request_body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ds.ChangeTransferStatusRequestBody"
+                            "$ref": "#/definitions/ds.UpdateTransferOrdersBody"
                         }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Порядок посещения успешно изменен",
                         "schema": {
                             "type": "string"
                         }
-                    }
-                }
-            }
-        },
-        "/transfer_requests/{transferID}/moder_change_status": {
-            "put": {
-                "description": "Изменяет статус заявки на трансфер на любой из доступных для модератора",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Заявки на трансфер"
-                ],
-                "summary": "Изменение статуса заявки на трансфер (для модератора)",
-                "parameters": [
-                    {
-                        "description": "Данные о заявке",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/ds.ChangeTransferStatusRequestBody"
+                            "type": "string"
                         }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
+                    },
+                    "403": {
+                        "description": "Доступ запрещен, отсутствует авторизация",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Заявка не найдена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при обновлении порядка посещения",
                         "schema": {
                             "type": "string"
                         }
@@ -411,12 +772,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "app.jsonMap": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "string"
-            }
-        },
         "app.loginReq": {
             "type": "object",
             "properties": {
@@ -437,13 +792,13 @@ const docTemplate = `{
                 "expires_in": {
                     "type": "integer"
                 },
-                "role": {
-                    "$ref": "#/definitions/role.Role"
-                },
-                "token_type": {
+                "login": {
                     "type": "string"
                 },
-                "username": {
+                "role": {
+                    "type": "integer"
+                },
+                "token_type": {
                     "type": "string"
                 }
             }
@@ -451,11 +806,10 @@ const docTemplate = `{
         "app.registerReq": {
             "type": "object",
             "properties": {
-                "name": {
-                    "description": "лучше назвать то же самое что login",
+                "login": {
                     "type": "string"
                 },
-                "pass": {
+                "password": {
                     "type": "string"
                 }
             }
@@ -468,16 +822,35 @@ const docTemplate = `{
                 }
             }
         },
+        "ds.AsyncBody": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
         "ds.ChangeTransferStatusRequestBody": {
             "type": "object",
             "properties": {
-                "status": {
-                    "type": "string"
-                },
-                "transferID": {
+                "reqID": {
                     "type": "integer"
                 },
-                "userName": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "ds.DelTransferToOrbitBody": {
+            "type": "object",
+            "properties": {
+                "orbit": {
+                    "type": "string"
+                },
+                "req": {
                     "type": "string"
                 }
             }
@@ -511,18 +884,30 @@ const docTemplate = `{
                 }
             }
         },
-        "role.Role": {
-            "type": "integer",
-            "enum": [
-                0,
-                1,
-                2
-            ],
-            "x-enum-varnames": [
-                "Guest",
-                "Client",
-                "Moderator"
-            ]
+        "ds.OrbitOrder": {
+            "type": "object",
+            "properties": {
+                "orbit_name": {
+                    "type": "string"
+                },
+                "transfer_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ds.UpdateTransferOrdersBody": {
+            "type": "object",
+            "properties": {
+                "req_id": {
+                    "type": "integer"
+                },
+                "transfer_order": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
         }
     }
 }`
@@ -533,8 +918,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8000",
 	BasePath:         "/",
 	Schemes:          []string{"http"},
-	Title:            "orbits",
-	Description:      "orbit transfer",
+	Title:            "orbits docs",
+	Description:      "ORBIT TRANSFER",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
