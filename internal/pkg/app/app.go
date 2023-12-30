@@ -105,9 +105,10 @@ func (a *Application) StartServer() {
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
 		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
-		clientMethods.POST("/transfer_to_orbit/add", a.addTransferToOrbit)
-		clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
+		//clientMethods.POST("/transfer_to_orbit/add", a.addTransferToOrbit)
+		//clientMethods.POST("/transfer_requests/create", a.createTransferRequest)
 		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
+		clientMethods.PUT("/orbits/:orbit_name/add", a.addOrbitToRequest)
 	}
 
 	moderMethods := a.r.Group("", a.WithAuthCheck(role.Moderator))
@@ -116,7 +117,6 @@ func (a *Application) StartServer() {
 		moderMethods.POST("/orbits/new_orbit", a.newOrbit)
 		moderMethods.POST("/orbits/upload_image", a.uploadOrbitImage)
 		moderMethods.DELETE("/orbits/change_status/:orbit_name", a.changeOrbitStatus)
-		moderMethods.GET("/transfer_requests/distinct_clients", a.getDistinctClients)
 	}
 
 	authorizedMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator))
@@ -124,8 +124,8 @@ func (a *Application) StartServer() {
 		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
 		authorizedMethods.GET("/transfer_to_orbit/:req_id", a.getOrbitsFromTransfer)
+		authorizedMethods.GET("/transfer_to_orbit/get_order/:req_id", a.getOrbitOrder)
 		authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
-		authorizedMethods.POST("/transfer_to_orbit/get_order", a.getOrbitOrder)
 	}
 
 	a.r.Run(":8000")
@@ -133,62 +133,89 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
-func (a *Application) addTransferToOrbit(c *gin.Context) {
-	var requestBody ds.DelTransferToOrbitBody
+// @Summary      Добавление орбиты в заявку на трансфер
+// @Description  Создает заявку на трансфер в статусе (или добавляет в открытую) и добавляет выбранную орбиту
+// @Tags Общее
+// @Accept json
+// @Produce      json
+// @Success      200  {object}  string
+// @Param Body body jsonMap true "Данные заказа"
+// @Router       /orbits/{orbit_name}/add [post]
+// удалить?
+func (a *Application) addOrbitToRequest(c *gin.Context) {
+	orbit_name := c.Param("orbit_name")
 
-	if err := c.BindJSON(&requestBody); err != nil {
-		c.Error(err)
-		c.AbortWithError(http.StatusBadRequest, err)
-		return
-	}
-
-	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
+	// Получение инфы об орбите -> orbit.ID
+	orbit, err := a.repo.GetOrbitByName(orbit_name)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-
-	reqID, _ := strconv.Atoi(requestBody.Req)
-
-	err1 := a.repo.AddTransferToOrbits(uint(reqID), orbit.ID)
-	if err1 != nil {
-		c.Error(err1)
+		c.Error(err)
 		return
 	}
 
-	c.String(http.StatusCreated, "Перелет добавлен")
-}
-
-func (a *Application) createTransferRequest(c *gin.Context) {
 	userUUID, exists := c.Get("userUUID")
 	if !exists {
 		panic(exists)
 	}
 
-	reqID, err := a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
+	request := &ds.TransferRequest{}
+	request, err = a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-
-	c.JSON(http.StatusOK, reqID)
-}
-
-func (a *Application) getDistinctClients(c *gin.Context) {
-	distinctClients, err := a.repo.GetDistinctClients()
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-	c.JSON(http.StatusOK, distinctClients)
-}
-
-func (a *Application) getOrbitOrder(c *gin.Context) {
-	var requestBody int
-	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
-		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
 
-	orbitOrder, err := a.repo.GetOrbitOrder(requestBody)
+	err = a.repo.AddTransferToOrbits(orbit.ID, request.ID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.String(http.StatusOK, "Орбита добавлена")
+}
+
+//func (a *Application) addTransferToOrbit(c *gin.Context) {
+//	var requestBody ds.DelTransferToOrbitBody
+//
+//	if err := c.BindJSON(&requestBody); err != nil {
+//		c.Error(err)
+//		c.AbortWithError(http.StatusBadRequest, err)
+//		return
+//	}
+//
+//	orbit, err := a.repo.GetOrbitByName(requestBody.Orbit)
+//	if err != nil {
+//		c.AbortWithError(http.StatusInternalServerError, err)
+//	}
+//
+//	reqID, _ := strconv.Atoi(requestBody.Req)
+//
+//	err1 := a.repo.AddTransferToOrbits(uint(reqID), orbit.ID)
+//	if err1 != nil {
+//		c.Error(err1)
+//		return
+//	}
+//
+//	c.String(http.StatusCreated, "Перелет добавлен")
+//}
+//
+//func (a *Application) createTransferRequest(c *gin.Context) {
+//	userUUID, exists := c.Get("userUUID")
+//	if !exists {
+//		panic(exists)
+//	}
+//
+//	reqID, err := a.repo.CreateTransferRequest(userUUID.(uuid.UUID))
+//	if err != nil {
+//		c.AbortWithError(http.StatusInternalServerError, err)
+//	}
+//
+//	c.JSON(http.StatusOK, reqID)
+//}
+
+func (a *Application) getOrbitOrder(c *gin.Context) {
+	req_id, _ := strconv.Atoi(c.Param("req_id"))
+
+	orbitOrder, err := a.repo.GetOrbitOrder(req_id)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 	}
@@ -197,14 +224,14 @@ func (a *Application) getOrbitOrder(c *gin.Context) {
 }
 
 func (a *Application) updateTransferOrder(c *gin.Context) {
-	var requestBody ds.UpdateVisitNumbersBody
+	var requestBody ds.UpdateTransferOrdersBody
 	if err := c.BindJSON(&requestBody); err != nil {
 		c.Error(err)
 		c.String(http.StatusBadRequest, "Bad Request")
 		return
 	}
 
-	err := a.repo.UpdateVisitNumbers(requestBody)
+	err := a.repo.UpdateTransferOrders(requestBody)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 	}
@@ -241,10 +268,8 @@ func (a *Application) getAllOrbits(c *gin.Context) {
 	isCircle := c.Query("is_circle")
 
 	userUUID, _ := c.Get("userUUID")
-	log.Println("uid ", userUUID)
 
 	allOrbits, reqID, err := a.repo.GetAllOrbits(orbitName, orbitIncl, isCircle, userUUID.(uuid.UUID))
-	log.Println("reqID: ", reqID)
 
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
@@ -343,8 +368,6 @@ func (a *Application) newOrbit(c *gin.Context) {
 		log.Println("ERROR")
 		c.Error(err)
 	}
-
-	log.Println("req body image :", requestBody.ImageURL)
 
 	err := a.repo.AddOrbit(&requestBody, requestBody.ImageURL)
 	if err != nil {

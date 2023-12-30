@@ -19,7 +19,7 @@ type User struct {
 2. Удалена - удалена клиентом (не отправлена, отменена)
 3. На рассмотрении - отправлена клиентом, проходит проверку у модератора
 4. Оказана - одобрена модератором (завершена успешно)
-5. Отклонена - не одобрена модератором (завершена неуспешно)
+5. Одобрена - не одобрена модератором (завершена неуспешно)
 */
 
 var ReqStatuses = []string{
@@ -27,7 +27,7 @@ var ReqStatuses = []string{
 	"На рассмотрении",
 	"Удалена",
 	"Отклонена",
-	"Оказана",
+	"Одобрена",
 }
 
 type TransferRequest struct {
@@ -55,12 +55,11 @@ type Orbit struct {
 }
 
 type TransferToOrbit struct {
-	ID           uint `gorm:"primaryKey;AUTO_INCREMENT"`
-	VisitNumber  uint
-	RequestRefer uint
-	Request      TransferRequest `gorm:"foreignKey:RequestRefer"`
-	OrbitRefer   uint
-	Orbit        Orbit `gorm:"foreignKey:OrbitRefer"`
+	RequestRefer  uint
+	Request       TransferRequest `gorm:"primaryKey;foreignKey:RequestRefer"`
+	OrbitRefer    uint
+	Orbit         Orbit `gorm:"primaryKey;foreignKey:OrbitRefer"`
+	TransferOrder uint
 }
 
 // JSON PARSER
@@ -70,36 +69,19 @@ type ChangeTransferStatusRequestBody struct {
 	Status     string `json:"status"`
 }
 
-type CreateTransferRequestBody struct {
-	Orbits []string
-}
-
-type SetRequestOrbitsRequestBody struct {
-	RequestID int
-	Orbits    []string
-}
-
-type AddOrbitToRequestBody struct {
-	Orbit string
-}
-
 type DelTransferToOrbitBody struct {
 	Orbit string
 	Req   string
 }
 
-type DelTransfReqRequestBody struct {
-	Req int
-}
-
-type UpdateVisitNumbersBody struct {
-	ReqID      int            `json:"req_id"`
-	VisitOrder map[string]int `json:"visit_order"`
+type UpdateTransferOrdersBody struct {
+	ReqID         int            `json:"req_id"`
+	TransferOrder map[string]int `json:"transfer_order"`
 }
 
 type OrbitOrder struct {
-	OrbitName  string `json:"orbit_name"`
-	VisitOrder int    `json:"visit_order"`
+	OrbitName     string `json:"orbit_name"`
+	TransferOrder int    `json:"transfer_order"`
 }
 
 type AsyncBody struct {

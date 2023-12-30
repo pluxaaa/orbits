@@ -30,7 +30,6 @@ func main() {
 	ctx := context.Background()
 	useSSL := false
 
-	// Initialize minio client object.
 	minioClient, err := minio.New(config.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(config.Minio.User, config.Minio.Pass, ""),
 		Secure: useSSL,
@@ -39,7 +38,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Make a new bucket called testbucket.
 	bucketName := "cnc"
 	location := "eu-east-1"
 
