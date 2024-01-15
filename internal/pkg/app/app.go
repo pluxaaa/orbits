@@ -95,7 +95,7 @@ func (a *Application) StartServer() {
 
 	a.r.GET("/orbits/:orbit_name", a.getDetailedOrbit)
 
-	a.r.POST("/transfer_requests/calculate_success/:id", a.asyncGetTransferResult)
+	a.r.POST("/transfer_requests/get_success/:id", a.asyncGetTransferResult)
 
 	anyoneMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator, role.Guest))
 	{

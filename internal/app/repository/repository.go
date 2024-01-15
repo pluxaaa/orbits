@@ -383,7 +383,7 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 		return fmt.Errorf("ошибка обновления статуса: %w", err)
 	}
 
-	if status == ds.ReqStatuses[2] || status == ds.ReqStatuses[3] {
+	if status == ds.ReqStatuses[2] {
 		err = r.DeleteTransferToOrbitEvery(id)
 	}
 
@@ -391,7 +391,7 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 }
 
 func (r *Repository) GetTransferRequestResult(id uint) error {
-	url := "http://127.0.0.1:4000"
+	url := "http://127.0.0.1:4000/async/calculate_success"
 
 	authKey := "secret-async-orbits"
 
