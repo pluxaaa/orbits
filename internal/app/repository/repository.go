@@ -363,7 +363,8 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 		}
 	}
 
-	if status == "Оказана" {
+	// расчет успеха маневра на выделенном сервисе
+	if status == "На рассмотрении" {
 		err := r.GetTransferRequestResult(id)
 		if err != nil {
 			fmt.Println("Ошибка при отправлении запроса:", err)
@@ -435,32 +436,6 @@ func (r *Repository) CreateTransferToOrbit(transfer_to_orbit ds.TransferToOrbit)
 	return r.db.Create(&transfer_to_orbit).Error
 }
 
-func (r *Repository) GetOrbitsFromTransfer(id int) ([]ds.Orbit, error) {
-	transfer_to_orbits := []ds.TransferToOrbit{}
-
-	err := r.db.Model(&ds.TransferToOrbit{}).Where("request_refer = ?", id).Find(&transfer_to_orbits).Error
-	if err != nil {
-		return []ds.Orbit{}, err
-	}
-
-	var orbits []ds.Orbit
-	for _, transfer_to_orbit := range transfer_to_orbits {
-		orbit, err := r.GetOrbitByID(transfer_to_orbit.OrbitRefer)
-		if err != nil {
-			return []ds.Orbit{}, err
-		}
-		for _, ele := range orbits {
-			if ele == *orbit {
-				continue
-			}
-		}
-		orbits = append(orbits, *orbit)
-	}
-
-	return orbits, nil
-
-}
-
 func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error {
 	orbit := ds.Orbit{ID: orbit_refer}
 	request := ds.TransferRequest{ID: request_refer}
@@ -526,7 +501,7 @@ func (r *Repository) GetOrbitOrder(id int) ([]ds.OrbitOrder, error) {
 			continue
 		}
 		orbitOrder := ds.OrbitOrder{
-			OrbitName:     orbit.Name,
+			OrbitName:     orbit,
 			TransferOrder: int(transfer_to_orbit.TransferOrder),
 		}
 		orbitOrders = append(orbitOrders, orbitOrder)

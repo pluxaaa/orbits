@@ -95,7 +95,7 @@ func (a *Application) StartServer() {
 
 	a.r.GET("/orbits/:orbit_name", a.getDetailedOrbit)
 
-	a.r.POST("/async/:id", a.asyncGetTransferResult)
+	a.r.POST("/transfer_requests/calculate_success/:id", a.asyncGetTransferResult)
 
 	anyoneMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator, role.Guest))
 	{
@@ -104,8 +104,8 @@ func (a *Application) StartServer() {
 
 	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
 	{
-		clientMethods.PUT("/transfer_to_orbit/update_order", a.updateTransferOrder)
-		clientMethods.DELETE("/transfer_to_orbit/delete_single", a.deleteTransferToOrbitSingle)
+		clientMethods.PUT("/transfer_requests/update_order", a.updateTransferOrder)
+		clientMethods.DELETE("/transfer_requests/delete_single", a.deleteTransferToOrbitSingle)
 		clientMethods.PUT("/orbits/:orbit_name/add", a.addOrbitToRequest)
 	}
 
@@ -121,9 +121,12 @@ func (a *Application) StartServer() {
 	{
 		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
-		authorizedMethods.GET("/transfer_to_orbit/:req_id", a.getOrbitsFromTransfer)
-		authorizedMethods.GET("/transfer_to_orbit/get_order/:req_id", a.getOrbitOrder)
-		authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
+		authorizedMethods.GET("/transfer_requests/get_order/:req_id", a.getOrbitOrder)
+		//authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
+
+		authorizedMethods.PUT("/transfer_requests/:req_id/change_status_client", a.changeRequestStatusClient)
+		authorizedMethods.PUT("/transfer_requests/:req_id/change_status_moder", a.changeRequestStatusModer)
+		authorizedMethods.DELETE("/transfer_requests/:req_id/delete", a.deleteRequest)
 	}
 
 	a.r.Run(":8000")
@@ -505,13 +508,84 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 // @Failure 404 {string} string "Заявка не найдена"
 // @Failure 500 {string} string "Внутренняя ошибка сервера"
 // @Router /requests/status [put]
-func (a *Application) changeRequestStatus(c *gin.Context) {
-	var requestBody ds.ChangeTransferStatusRequestBody
+//func (a *Application) changeRequestStatus(c *gin.Context) {
+//	var requestBody ds.ChangeTransferStatusRequestBody
+//
+//	if err := c.BindJSON(&requestBody); err != nil {
+//		c.Error(err)
+//		return
+//	}
+//
+//	userRole, exists := c.Get("userRole")
+//	if !exists {
+//		panic(exists)
+//	}
+//	userUUID, exists := c.Get("userUUID")
+//	if !exists {
+//		panic(exists)
+//	}
+//
+//	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
+//	if err != nil {
+//		c.AbortWithError(http.StatusForbidden, err)
+//		return
+//	}
+//
+//	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
+//		c.String(http.StatusBadRequest, "Неверный статус")
+//		return
+//	}
+//
+//	if userRole == role.Client {
+//		if currRequest.ClientRefer == userUUID {
+//			if slices.Contains(ds.ReqStatuses[:3], requestBody.Status) {
+//				if currRequest.Status != ds.ReqStatuses[0] {
+//					c.String(http.StatusBadRequest, "Нельзя поменять статус с ", currRequest.Status,
+//						" на ", requestBody.Status)
+//					return
+//				}
+//				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+//
+//				if err != nil {
+//					c.Error(err)
+//					return
+//				}
+//
+//				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+//				return
+//			} else {
+//				c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
+//				return
+//			}
+//		} else {
+//			c.String(http.StatusForbidden, "Клиент не является ответственным")
+//			return
+//		}
+//	} else {
+//		if currRequest.ModerRefer == userUUID {
+//			if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-2:], requestBody.Status) {
+//				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+//
+//				if err != nil {
+//					c.Error(err)
+//					return
+//				}
+//
+//				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+//				return
+//			} else {
+//				c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
+//				return
+//			}
+//		} else {
+//			c.String(http.StatusForbidden, "Модератор не является ответственным")
+//			return
+//		}
+//	}
+//}
 
-	if err := c.BindJSON(&requestBody); err != nil {
-		c.Error(err)
-		return
-	}
+func (a *Application) changeRequestStatusClient(c *gin.Context) {
+	req_id, err := strconv.Atoi(c.Param("req_id"))
 
 	userRole, exists := c.Get("userRole")
 	if !exists {
@@ -522,7 +596,49 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 		panic(exists)
 	}
 
-	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
+	currRequest, err := a.repo.GetRequestByID(uint(req_id), userUUID.(uuid.UUID), userRole)
+	if err != nil {
+		c.AbortWithError(http.StatusForbidden, err)
+		return
+	}
+
+	if currRequest.ClientRefer == userUUID {
+		err = a.repo.ChangeRequestStatus(uint(req_id), ds.ReqStatuses[1])
+
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.String(http.StatusCreated, "Заявка оформлена")
+		return
+	} else {
+		c.String(http.StatusForbidden, "Клиент не является ответственным")
+		return
+	}
+}
+
+func (a *Application) changeRequestStatusModer(c *gin.Context) {
+	var requestBody ds.NewBody
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.Error(err)
+		return
+	}
+	log.Println(requestBody.Status)
+
+	req_id, err := strconv.Atoi(c.Param("req_id"))
+
+	userRole, exists := c.Get("userRole")
+	if !exists {
+		panic(exists)
+	}
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		panic(exists)
+	}
+
+	currRequest, err := a.repo.GetRequestByID(uint(req_id), userUUID.(uuid.UUID), userRole)
 	if err != nil {
 		c.AbortWithError(http.StatusForbidden, err)
 		return
@@ -533,82 +649,59 @@ func (a *Application) changeRequestStatus(c *gin.Context) {
 		return
 	}
 
-	if userRole == role.Client {
-		if currRequest.ClientRefer == userUUID {
-			if slices.Contains(ds.ReqStatuses[:3], requestBody.Status) {
-				if currRequest.Status != ds.ReqStatuses[0] {
-					c.String(http.StatusBadRequest, "Нельзя поменять статус с ", currRequest.Status,
-						" на ", requestBody.Status)
-					return
-				}
-				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
+	if currRequest.ModerRefer == userUUID {
+		if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-2:], requestBody.Status) {
+			err = a.repo.ChangeRequestStatus(uint(req_id), requestBody.Status)
 
-				if err != nil {
-					c.Error(err)
-					return
-				}
-
-				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-				return
-			} else {
-				c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
+			if err != nil {
+				c.Error(err)
 				return
 			}
+
+			c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
+			return
 		} else {
-			c.String(http.StatusForbidden, "Клиент не является ответственным")
+			c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
 			return
 		}
 	} else {
-		if currRequest.ModerRefer == userUUID {
-			if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-2:], requestBody.Status) {
-				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
-
-				if err != nil {
-					c.Error(err)
-					return
-				}
-
-				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-				return
-			} else {
-				c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
-				return
-			}
-		} else {
-			c.String(http.StatusForbidden, "Модератор не является ответственным")
-			return
-		}
+		c.String(http.StatusForbidden, "Модератор не является ответственным")
+		return
 	}
 }
 
-// @Summary Получение орбит из заявки
-// @Description Возвращает список орбит, связанных с указанной заявкой
-// @Tags Трансферы
-// @Accept json
-// @Produce json
-// @Param req_id path int true "ID заявки"
-// @Security ApiKeyAuth
-// @Success 200 {array} ds.Orbit "Список орбит, связанных с заявкой"
-// @Failure 400 {string} string "Ошибка в ID заявки"
-// @Failure 403 {string} string "Доступ запрещен, отсутствует авторизация"
-// @Failure 404 {string} string "Заявка не найдена"
-// @Failure 500 {string} string "Ошибка при получении орбит из заявки"
-// @Router /orbits/transfer/{req_id} [get]
-func (a *Application) getOrbitsFromTransfer(c *gin.Context) { // нужно добавить проверку на авторизацию пользователя
+func (a *Application) deleteRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
+
+	userRole, exists := c.Get("userRole")
+	if !exists {
+		panic(exists)
+	}
+	userUUID, exists := c.Get("userUUID")
+	if !exists {
+		panic(exists)
+	}
+
+	currRequest, err := a.repo.GetRequestByID(uint(req_id), userUUID.(uuid.UUID), userRole)
 	if err != nil {
-		c.String(http.StatusBadRequest, "Ошибка в ID заявки")
+		c.AbortWithError(http.StatusForbidden, err)
 		return
 	}
 
-	orbits, err := a.repo.GetOrbitsFromTransfer(req_id)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "Ошибка при получении орбит из заявки")
+	if currRequest.ClientRefer == userUUID {
+		err = a.repo.ChangeRequestStatus(uint(req_id), ds.ReqStatuses[2])
+
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		c.String(http.StatusCreated, "Заявка удалена")
+		return
+	} else {
+		c.String(http.StatusForbidden, "Клиент не является ответственным")
 		return
 	}
-
-	c.JSON(http.StatusOK, orbits)
-
 }
 
 // @Summary Удаление перелета по двум ID

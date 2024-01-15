@@ -69,6 +69,10 @@ type ChangeTransferStatusRequestBody struct {
 	Status     string `json:"status"`
 }
 
+type NewBody struct {
+	Status string `json:"status"`
+}
+
 type DelTransferToOrbitBody struct {
 	Orbit string
 	Req   string
@@ -80,7 +84,7 @@ type UpdateTransferOrdersBody struct {
 }
 
 type OrbitOrder struct {
-	OrbitName     string `json:"orbit_name"`
+	OrbitName     *Orbit `json:"orbit"`
 	TransferOrder int    `json:"transfer_order"`
 }
 
