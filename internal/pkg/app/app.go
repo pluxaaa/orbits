@@ -102,13 +102,6 @@ func (a *Application) StartServer() {
 		anyoneMethods.GET("/orbits", a.getAllOrbits)
 	}
 
-	clientMethods := a.r.Group("", a.WithAuthCheck(role.Client))
-	{
-		clientMethods.PUT("/transfer_requests/update_order", a.updateTransferOrder)
-		clientMethods.DELETE("/transfer_requests/delete_single", a.deleteTransferToOrbitSingle)
-		clientMethods.PUT("/orbits/:orbit_name/add", a.addOrbitToRequest)
-	}
-
 	moderMethods := a.r.Group("", a.WithAuthCheck(role.Moderator))
 	{
 		moderMethods.PUT("/orbits/:orbit_name/edit", a.editOrbit)
@@ -119,10 +112,13 @@ func (a *Application) StartServer() {
 
 	authorizedMethods := a.r.Group("", a.WithAuthCheck(role.Client, role.Moderator))
 	{
+		authorizedMethods.PUT("/transfer_requests/update_order", a.updateTransferOrder)
+		authorizedMethods.DELETE("/transfer_requests/delete_single", a.deleteTransferToOrbitSingle)
+		authorizedMethods.PUT("/orbits/:orbit_name/add", a.addOrbitToRequest)
+
 		authorizedMethods.GET("/transfer_requests", a.getAllRequests)
 		authorizedMethods.GET("/transfer_requests/:req_id", a.getDetailedRequest)
 		authorizedMethods.GET("/transfer_requests/get_order/:req_id", a.getOrbitOrder)
-		//authorizedMethods.PUT("/transfer_requests/change_status", a.changeRequestStatus)
 
 		authorizedMethods.PUT("/transfer_requests/:req_id/change_status_client", a.changeRequestStatusClient)
 		authorizedMethods.PUT("/transfer_requests/:req_id/change_status_moder", a.changeRequestStatusModer)
@@ -232,6 +228,14 @@ func (a *Application) updateTransferOrder(c *gin.Context) {
 // @Success 200 {string} string "Статус успешно обновлен"
 // @Router /transfer/result [post]
 func (a *Application) asyncGetTransferResult(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	expectedToken := "secret-async-orbits"
+
+	if authHeader != expectedToken {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Проверка непройдена"})
+		return
+	}
+
 	var requestBody = &ds.AsyncBody{}
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Println("ERROR")
@@ -495,95 +499,15 @@ func (a *Application) getDetailedRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, request)
 }
 
-// @Summary Изменение статуса заявки
-// @Description Изменяет статус указанной заявки в зависимости от роли пользователя
-// @Tags Заявки на трансфер
-// @Accept json
-// @Produce plain
-// @Param request_body body ds.ChangeTransferStatusRequestBody true "Тело запроса для изменения статуса заявки"
-// @Security ApiKeyAuth
-// @Success 201 {string} string "Статус заявки успешно изменен"
-// @Failure 400 {string} string "Неверный запрос"
-// @Failure 403 {string} string "Запрещено изменение статуса"
-// @Failure 404 {string} string "Заявка не найдена"
-// @Failure 500 {string} string "Внутренняя ошибка сервера"
-// @Router /requests/status [put]
-//func (a *Application) changeRequestStatus(c *gin.Context) {
-//	var requestBody ds.ChangeTransferStatusRequestBody
-//
-//	if err := c.BindJSON(&requestBody); err != nil {
-//		c.Error(err)
-//		return
-//	}
-//
-//	userRole, exists := c.Get("userRole")
-//	if !exists {
-//		panic(exists)
-//	}
-//	userUUID, exists := c.Get("userUUID")
-//	if !exists {
-//		panic(exists)
-//	}
-//
-//	currRequest, err := a.repo.GetRequestByID(requestBody.TransferID, userUUID.(uuid.UUID), userRole)
-//	if err != nil {
-//		c.AbortWithError(http.StatusForbidden, err)
-//		return
-//	}
-//
-//	if !slices.Contains(ds.ReqStatuses, requestBody.Status) {
-//		c.String(http.StatusBadRequest, "Неверный статус")
-//		return
-//	}
-//
-//	if userRole == role.Client {
-//		if currRequest.ClientRefer == userUUID {
-//			if slices.Contains(ds.ReqStatuses[:3], requestBody.Status) {
-//				if currRequest.Status != ds.ReqStatuses[0] {
-//					c.String(http.StatusBadRequest, "Нельзя поменять статус с ", currRequest.Status,
-//						" на ", requestBody.Status)
-//					return
-//				}
-//				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
-//
-//				if err != nil {
-//					c.Error(err)
-//					return
-//				}
-//
-//				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-//				return
-//			} else {
-//				c.String(http.StatusForbidden, "Клиент не может установить статус ", requestBody.Status)
-//				return
-//			}
-//		} else {
-//			c.String(http.StatusForbidden, "Клиент не является ответственным")
-//			return
-//		}
-//	} else {
-//		if currRequest.ModerRefer == userUUID {
-//			if slices.Contains(ds.ReqStatuses[len(ds.ReqStatuses)-2:], requestBody.Status) {
-//				err = a.repo.ChangeRequestStatus(requestBody.TransferID, requestBody.Status)
-//
-//				if err != nil {
-//					c.Error(err)
-//					return
-//				}
-//
-//				c.String(http.StatusCreated, "Текущий статус: ", requestBody.Status)
-//				return
-//			} else {
-//				c.String(http.StatusForbidden, "Модератор не может установить статус ", requestBody.Status)
-//				return
-//			}
-//		} else {
-//			c.String(http.StatusForbidden, "Модератор не является ответственным")
-//			return
-//		}
-//	}
-//}
-
+// @Summary      Изменение статуса заявки клиентом
+// @Description  Изменяет статус заявки клиентом на "Оформлена"
+// @Tags         Заявки на трансфер
+// @Produce      plain
+// @Param req_id path int true "ID заявки"
+// @Security     ApiKeyAuth
+// @Success      201 {string} string "Заявка оформлена"
+// @Failure      403 {string} string "Клиент не является ответственным или заявка не найдена"
+// @Router       /transfer_requests/{req_id}/changeStatus [put]
 func (a *Application) changeRequestStatusClient(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 
@@ -618,6 +542,18 @@ func (a *Application) changeRequestStatusClient(c *gin.Context) {
 	}
 }
 
+// @Summary      Изменение статуса заявки модератором
+// @Description  Изменяет статус заявки модератором на указанный в теле запроса
+// @Tags         Заявки на трансфер
+// @Accept       json
+// @Produce      plain
+// @Param req_id path int true "ID заявки"
+// @Param status body ds.NewBody true "Новый статус заявки"
+// @Security     ApiKeyAuth
+// @Success      201 {string} string "Статус успешно изменен"
+// @Failure      400 {string} string "Неверный статус или неверный запрос"
+// @Failure      403 {string} string "Модератор не является ответственным или невозможно установить указанный статус"
+// @Router       /transfer_requests/{req_id}/changeStatusModer [put]
 func (a *Application) changeRequestStatusModer(c *gin.Context) {
 	var requestBody ds.NewBody
 
@@ -670,6 +606,15 @@ func (a *Application) changeRequestStatusModer(c *gin.Context) {
 	}
 }
 
+// @Summary      Удаление заявки клиентом
+// @Description  Удаляет заявку клиентом, устанавливая статус "Удалена"
+// @Tags         Заявки на трансфер
+// @Produce      plain
+// @Param req_id path int true "ID заявки"
+// @Security     ApiKeyAuth
+// @Success      201 {string} string "Заявка успешно удалена"
+// @Failure      403 {string} string "Клиент не является ответственным или заявка не найдена"
+// @Router       /transfer_requests/{req_id}/delete [delete]
 func (a *Application) deleteRequest(c *gin.Context) {
 	req_id, err := strconv.Atoi(c.Param("req_id"))
 

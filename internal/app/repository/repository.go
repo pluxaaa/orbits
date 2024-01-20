@@ -237,14 +237,6 @@ func (r *Repository) GetAllRequests(userRole any, dateStart, dateFin, status /*c
 		}
 	}
 
-	//if client != "" {
-	//	clientUUID, err := r.GetUserByName(client)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	qry = qry.Where("client_refer = ?", clientUUID.UUID)
-	//}
-
 	if userRole == role.Moderator {
 		qry = qry.Where("status = ?", ds.ReqStatuses[1])
 	}
@@ -265,19 +257,31 @@ func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (*ds.TransferReq
 	//проверка есть ли открытая заявка у клиента
 	request, err := r.GetCurrentRequest(client_id)
 	if err != nil {
-
-		//назначение модератора
-		moders := []ds.User{}
-		err = r.db.Where("role = ?", 2).Find(&moders).Error
+		var user, client, moder ds.User
+		var moder_refer uuid.UUID
+		err = r.db.First(&user, "uuid = ?", client_id).Error
 		if err != nil {
 			return nil, err
 		}
-		n := rand.Int() % len(moders)
-		moder_refer := moders[n].UUID
 
-		//поля типа Users, связанные с передавыемыми значениями из функции
-		client := ds.User{UUID: client_id}
-		moder := ds.User{UUID: moder_refer}
+		if user.Role == role.Client {
+			//назначение модератора
+			moders := []ds.User{}
+			err = r.db.Where("role = ?", 2).Find(&moders).Error
+			if err != nil {
+				return nil, err
+			}
+			n := rand.Int() % len(moders)
+			moder_refer = moders[n].UUID
+
+			//поля типа Users, связанные с передавыемыми значениями из функции
+			client = ds.User{UUID: client_id}
+			moder = ds.User{UUID: moder_refer}
+		} else {
+			moder_refer = client_id
+			client = ds.User{UUID: client_id}
+			moder = ds.User{UUID: client_id}
+		}
 
 		NewTransferRequest := &ds.TransferRequest{
 			ID:            uint(len([]ds.TransferRequest{})),
@@ -326,35 +330,6 @@ func (r *Repository) GetCurrentRequest(client_refer uuid.UUID) (*ds.TransferRequ
 	return request, nil
 }
 
-//func (r *Repository) CreateTransferRequest(client_id uuid.UUID) (uint, error) {
-//	//назначение модератора
-//	moders := []ds.User{}
-//	err := r.db.Where("role = ?", 2).Find(&moders).Error
-//	if err != nil {
-//		return 0, err
-//	}
-//	n := rand.Int() % len(moders)
-//	moder_refer := moders[n].UUID
-//
-//	//поля типа Users, связанные с передавыемыми значениями из функции
-//	client := ds.User{UUID: client_id}
-//	moder := ds.User{UUID: moder_refer}
-//
-//	NewTransferRequest := &ds.TransferRequest{
-//		ID:            uint(len([]ds.TransferRequest{})),
-//		ClientRefer:   client_id,
-//		Client:        client,
-//		ModerRefer:    moder_refer,
-//		Moder:         moder,
-//		Status:        "Черновик",
-//		DateCreated:   time.Now(),
-//		DateProcessed: nil,
-//		DateFinished:  nil,
-//		Result:        nil,
-//	}
-//	return NewTransferRequest.ID, r.db.Create(NewTransferRequest).Error
-//}
-
 func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 	if slices.Contains(ds.ReqStatuses[2:5], status) {
 		err := r.db.Model(&ds.TransferRequest{}).Where("id = ?", id).Update("date_finished", time.Now()).Error
@@ -393,7 +368,7 @@ func (r *Repository) ChangeRequestStatus(id uint, status string) error {
 func (r *Repository) GetTransferRequestResult(id uint) error {
 	url := "http://127.0.0.1:4000/async/calculate_success"
 
-	authKey := "secret-async-orbits"
+	//authKey := "secret-async-orbits"
 
 	requestBody := map[string]interface{}{"id": int(id)}
 	jsonData, err := json.Marshal(requestBody)
@@ -406,7 +381,7 @@ func (r *Repository) GetTransferRequestResult(id uint) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", authKey)
+	//req.Header.Set("Authorization", authKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -460,31 +435,6 @@ func (r *Repository) AddTransferToOrbits(orbit_refer, request_refer uint) error 
 		return err
 	}
 }
-
-//func (r *Repository) AddTransferToOrbits(request_refer, orbit_refer uint) error {
-//	orbit := ds.Orbit{ID: orbit_refer}
-//	request := ds.TransferRequest{ID: request_refer}
-//	var currTransfers []ds.TransferToOrbit
-//
-//	err := r.db.Where("request_refer = ?", request_refer).Find(&currTransfers).Error
-//	if err != nil {
-//		return err
-//	}
-//
-//	err = r.db.Where("request_refer = ?", request_refer).Where("orbit_refer = ?", orbit_refer).First(&ds.TransferToOrbit{}).Error
-//	if err != nil {
-//		NewMtM := &ds.TransferToOrbit{
-//			Orbit:         orbit,
-//			OrbitRefer:    orbit_refer,
-//			Request:       request,
-//			RequestRefer:  request_refer,
-//			TransferOrder: uint(len(currTransfers) + 1),
-//		}
-//		return r.db.Create(NewMtM).Error
-//	} else {
-//		return err
-//	}
-//}
 
 func (r *Repository) GetOrbitOrder(id int) ([]ds.OrbitOrder, error) {
 	transfer_to_orbits := []ds.TransferToOrbit{}

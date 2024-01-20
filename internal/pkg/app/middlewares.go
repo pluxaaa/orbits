@@ -86,8 +86,7 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(context *gi
 
 		isAssigned := false
 
-		for q, oneOfAssignedRole := range assignedRoles {
-			log.Println(q, "   ", oneOfAssignedRole)
+		for _, oneOfAssignedRole := range assignedRoles {
 			if myClaims.Role == oneOfAssignedRole {
 				isAssigned = true
 				break
